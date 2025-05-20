@@ -2,9 +2,12 @@
   "name": "mibot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node -r ts-node/register src/index.ts",
+    "dev": "nodemon --watch src --ext ts --exec \"node --experimental-specifier-resolution=node -r ts-node/register\" src/index.ts",
+    "build": "tsc",
+    "prod": "node dist/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -16,5 +19,12 @@
     "dotenv": "^16.5.0",
     "js-yaml": "^4.1.0",
     "lavalink-client": "^2.5.3"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.15.20",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }
