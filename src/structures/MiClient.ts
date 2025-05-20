@@ -4,7 +4,7 @@ import {
   GatewayIntentBits,
   Partials,
 } from 'discord.js';
-import { Command } from '../types/Command';
+import { Command } from '../types/commands/Command';
 import { BotConfig } from '../types/Config';
 
 import { LavalinkManager } from 'lavalink-client';

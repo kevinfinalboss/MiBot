@@ -5,7 +5,7 @@ import {
   SlashCommandSubcommandsOnlyBuilder,
   ContextMenuCommandBuilder,
 } from 'discord.js';
-import { MiClient } from '../structures/MiClient';
+import { MiClient } from '../../structures/MiClient';
 import { CommandContext } from './CommandContext';
 
 export type CommandType = 'SLASH' | 'PREFIX' | 'CONTEXT_MENU' | 'HYBRID';
