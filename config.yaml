@@ -1,0 +1,25 @@
+bot:
+  token: ${DISCORD_TOKEN}
+  prefix: "!"
+  useSharding: false
+  shards: 1
+  ownerIds:
+    - ${OWNER_ID_1}
+
+lavalink:
+  nodes:
+    - id: "Main"
+      host: ${LAVALINK_HOST}
+      port: ${LAVALINK_PORT}
+      password: ${LAVALINK_PASSWORD}
+      secure: true
+  defaultSearchEngine: "ytsearch"
+  autoPlay: false
+
+cloudflare:
+  zoneId: ${CLOUDFLARE_ZONE_ID}
+  apiToken: ${CLOUDFLARE_API_TOKEN}
+
+pterodactyl:
+  url: ${PTERODACTYL_URL}
+  apiKey: ${PTERODACTYL_API_KEY}
