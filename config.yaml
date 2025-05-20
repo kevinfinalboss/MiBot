@@ -1,5 +1,5 @@
 bot:
-  token: ${DISCORD_TOKEN}
+  token: ${BOT_TOKEN}
   prefix: "!"
   useSharding: false
   shards: 1
@@ -9,17 +9,17 @@ bot:
 lavalink:
   nodes:
     - id: "Main"
-      host: ${LAVALINK_HOST}
-      port: ${LAVALINK_PORT}
-      password: ${LAVALINK_PASSWORD}
+      host: ${LAVALINK_NODE_1_HOST}
+      port: ${LAVALINK_NODE_1_PORT}
+      password: ${LAVALINK_NODE_1_PASSWORD}
       secure: true
   defaultSearchEngine: "ytsearch"
   autoPlay: false
 
 cloudflare:
-  zoneId: ${CLOUDFLARE_ZONE_ID}
-  apiToken: ${CLOUDFLARE_API_TOKEN}
+  zoneId: ${CF_ZONE_ID}
+  apiToken: ${CF_API_TOKEN}
 
 pterodactyl:
-  url: ${PTERODACTYL_URL}
-  apiKey: ${PTERODACTYL_API_KEY}
+  url: ${PTERO_URL}
+  apiKey: ${PTERO_API_KEY}
