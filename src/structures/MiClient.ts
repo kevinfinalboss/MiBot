@@ -6,8 +6,8 @@ import {
 } from 'discord.js';
 import { Command } from '../types/commands/Command';
 import { BotConfig } from '../types/Config';
-
 import { LavalinkManager } from 'lavalink-client';
+import { logger } from '../utils/logger';
 
 export class MiClient extends Client {
   public config: BotConfig;
@@ -40,17 +40,21 @@ export class MiClient extends Client {
     if (!config.lavalink.nodes || !Array.isArray(config.lavalink.nodes) || config.lavalink.nodes.length === 0) {
       throw new Error('É necessário configurar pelo menos um node Lavalink válido');
     }
-
-    const nodes = config.lavalink.nodes.map(node => ({
-      id: node.id,
-      host: node.host,
-      port: node.port,
-      secure: node.secure,
-      authorization: node.password
-    }));
-
+        
+    const lavalinkNodes = config.lavalink.nodes.map(node => {
+      return {
+        id: node.id,
+        host: node.host,
+        port: parseInt(String(node.port), 10),
+        authorization: node.password,
+        secure: node.secure
+      };
+    });
+    
+    logger.info('Inicializando LavalinkManager com ' + lavalinkNodes.length + ' nós');
+        
     this.lavalink = new LavalinkManager({
-      nodes,
+      nodes: lavalinkNodes,
       sendToShard: (id, payload) => {
         const guild = this.guilds.cache.get(id);
         if (guild) guild.shard.send(payload);
@@ -66,7 +70,7 @@ export class MiClient extends Client {
         id: this.user!.id,
         username: this.user!.tag
       });
-      console.log(`[Lavalink] Conectado como ${this.user!.tag}`);
+      logger.success('Lavalink conectado como ' + this.user!.tag);
     });
 
     this.on('raw', (d) => {
@@ -77,7 +81,8 @@ export class MiClient extends Client {
   }
 
   public async start(): Promise<void> {
+    logger.info('Iniciando login no Discord...');
     await this.login(this.config.bot.token);
-    console.log(`[MiBot] Logado como ${this.user?.tag}`);
+    logger.success('Logado como ' + this.user?.tag);
   }
 }
