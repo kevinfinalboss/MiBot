@@ -1,6 +1,6 @@
 bot:
   token: ${BOT_TOKEN}
-  prefix: "!"
+  prefix: "mi!"
   useSharding: false
   shards: 1
   ownerIds:
