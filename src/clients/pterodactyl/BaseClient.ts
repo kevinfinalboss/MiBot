@@ -53,7 +53,6 @@ export class PterodactylBaseClient {
         (error) => {
           logger.error(`[Pterodactyl ${apiType}] Response error: ${error.response?.status} ${error.response?.statusText}`);
           if (error.response?.data) {
-            logger.error(`[Pterodactyl ${apiType}] Error details: ${JSON.stringify(error.response.data)}`);
           }
           return Promise.reject(error);
         }
