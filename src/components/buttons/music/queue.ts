@@ -20,7 +20,7 @@ export default {
     try {
       if (!interaction.guildId) {
         await interaction.reply({
-          content: 'Este botão só pode ser usado em servidores.',
+          content: '❌ Este botão só pode ser usado em servidores.',
           ephemeral: true
         });
         return;
@@ -30,7 +30,7 @@ export default {
       
       if (!player) {
         await interaction.reply({
-          content: 'Não há nenhum player ativo neste servidor.',
+          content: '❌ Não há nenhum player ativo neste servidor.',
           ephemeral: true
         });
         return;
@@ -41,7 +41,7 @@ export default {
 
       if (!currentTrack && queueTracks.length === 0) {
         await interaction.reply({
-          content: 'A fila está vazia.',
+          content: '📭 A fila está vazia.',
           ephemeral: true
         });
         return;
@@ -52,12 +52,14 @@ export default {
         .setColor('#9F59FF')
         .setTimestamp();
 
+      const embedFields = [];
+
       if (currentTrack) {
         const progress = player.position || 0;
         const duration = currentTrack.info.duration || 0;
         const progressBar = createProgressBar(progress, duration);
         
-        embed.addFields({
+        embedFields.push({
           name: '🔄 Tocando agora',
           value: `**[${currentTrack.info.title}](${currentTrack.info.uri})**\n` +
                  `👨‍🎤 ${currentTrack.info.author || 'Desconhecido'}\n` +
@@ -83,34 +85,42 @@ export default {
           queueList += `\n*... e mais ${queueTracks.length - 10} música(s)*`;
         }
 
-        embed.addFields(
-          {
-            name: `🔜 Próximas (${queueTracks.length})`,
-            value: queueList || 'Nenhuma música na fila',
-            inline: false
-          },
-          {
-            name: '📊 Estatísticas da Fila',
-            value: `🎵 Total: ${queueTracks.length} música(s)\n⏱️ Duração: ${formatTime(totalDuration)}`,
-            inline: true
-          }
-        );
+        embedFields.push({
+          name: `🔜 Próximas (${queueTracks.length})`,
+          value: queueList || 'Nenhuma música na fila',
+          inline: false
+        });
+
+        embedFields.push({
+          name: '📊 Estatísticas da Fila',
+          value: `🎵 Total: ${queueTracks.length} música(s)\n⏱️ Duração: ${formatTime(totalDuration)}`,
+          inline: true
+        });
       } else {
-        embed.addFields({
+        embedFields.push({
           name: '📭 Fila vazia',
           value: 'Não há músicas na fila.',
           inline: false
         });
       }
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      embed.addFields(embedFields);
+
+      const response = await interaction.reply({ embeds: [embed], ephemeral: true });
+      
+      setTimeout(async () => {
+        try {
+          await response.delete();
+        } catch (error) {
+        }
+      }, 30000);
       
     } catch (error) {
       logger.error(`Erro no botão queue: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: 'Ocorreu um erro ao mostrar a fila.',
+          content: '❌ Ocorreu um erro ao mostrar a fila.',
           ephemeral: true
         });
       }
