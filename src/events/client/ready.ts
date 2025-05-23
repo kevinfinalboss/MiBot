@@ -1,5 +1,5 @@
 import { Client } from 'discord.js';
-import { Event } from '../../types/Event';
+import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 
 const event: Event<'ready'> = {

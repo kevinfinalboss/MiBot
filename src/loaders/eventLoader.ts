@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { MiClient } from '../structures/MiClient';
-import { Event } from '../types/Event';
+import { Event } from '../types/events/Event';
 import { logger } from '../utils/logger';
 
 export async function loadEvents(client: MiClient): Promise<void> {

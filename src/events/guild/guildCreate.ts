@@ -1,5 +1,5 @@
 import { Guild } from 'discord.js';
-import { Event } from '../../types/Event';
+import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { MiClient } from '../../structures/MiClient';
 

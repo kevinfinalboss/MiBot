@@ -1,6 +1,6 @@
 import { Interaction, GuildMember, TextChannel, DMChannel, NewsChannel } from 'discord.js';
 import { MiClient } from '../../structures/MiClient';
-import { Event } from '../../types/Event';
+import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { CommandContext } from '../../types/commands/CommandContext';
 

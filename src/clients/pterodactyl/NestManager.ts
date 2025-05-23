@@ -6,7 +6,7 @@ import {
   PterodactylNode,
   PterodactylAllocation,
   PterodactylApiResponse
-} from '../../types/Pterodactyl';
+} from '../../types/cloudflare/Pterodactyl';
 import { logger } from '../../utils/logger';
 
 export class NestManager extends PterodactylBaseClient {

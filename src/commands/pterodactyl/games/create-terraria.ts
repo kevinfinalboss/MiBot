@@ -2,7 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, AutocompleteInteraction } from 'disc
 import { Command } from '../../../types/commands/Command';
 import { CommandContext } from '../../../types/commands/CommandContext';
 import { MiClient } from '../../../structures/MiClient';
-import { CreateServerRequest } from '../../../types/Pterodactyl';
+import { CreateServerRequest } from '../../../types/cloudflare/Pterodactyl';
 import { logger } from '../../../utils/logger';
 
 const command: Command = {

@@ -1,5 +1,5 @@
 import { EmbedBuilder, TextChannel } from 'discord.js';
-import { Event } from '../../types/Event';
+import { Event } from '../../types/events/Event';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
 

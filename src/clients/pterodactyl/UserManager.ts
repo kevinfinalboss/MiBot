@@ -1,6 +1,6 @@
 import { AxiosResponse } from 'axios';
 import { PterodactylBaseClient } from './BaseClient';
-import { PterodactylUser, PterodactylApiResponse } from '../../types/Pterodactyl';
+import { PterodactylUser, PterodactylApiResponse } from '../../types/cloudflare/Pterodactyl';
 
 export interface CreateUserRequest {
   username: string;
