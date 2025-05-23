@@ -1,6 +1,6 @@
 import { AxiosResponse } from 'axios';
 import { PterodactylBaseClient } from './BaseClient';
-import { PterodactylServerStats, PterodactylServer } from '../../types/cloudflare/Pterodactyl';
+import { PterodactylServerStats, PterodactylServer } from '../../types/pterodactyl/Pterodactyl';
 
 export interface ServerStatsFormatted {
   serverId: number;

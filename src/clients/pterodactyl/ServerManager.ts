@@ -4,7 +4,7 @@ import {
   PterodactylServer,
   PterodactylApiResponse,
   CreateServerRequest
-} from '../../types/cloudflare/Pterodactyl';
+} from '../../types/pterodactyl/Pterodactyl';
 
 export class ServerManager extends PterodactylBaseClient {
   
