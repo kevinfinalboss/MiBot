@@ -45,10 +45,15 @@ export class ServerManager extends PterodactylBaseClient {
 
   async getServer(serverId: number): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.get(
+      const response: AxiosResponse<PterodactylServer> = await this.api.get(
         `/servers/${serverId}?include=allocations,user,subusers,nest,egg,variables,location,node,databases`
       );
-      return response.data.data;
+      
+      if (!response.data) {
+        throw new Error(`Servidor ${serverId} não encontrado na API`);
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError(`getServer(${serverId})`, error);
     }
@@ -56,10 +61,15 @@ export class ServerManager extends PterodactylBaseClient {
 
   async getServerByUuid(uuid: string): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.get(
+      const response: AxiosResponse<PterodactylServer> = await this.api.get(
         `/servers/external/${uuid}?include=allocations,user,subusers,nest,egg,variables,location,node,databases`
       );
-      return response.data.data;
+      
+      if (!response.data) {
+        throw new Error(`Servidor com UUID ${uuid} não encontrado na API`);
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError(`getServerByUuid(${uuid})`, error);
     }
@@ -78,8 +88,13 @@ export class ServerManager extends PterodactylBaseClient {
 
   async createServer(serverData: CreateServerRequest): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.post('/servers', serverData);
-      return response.data.data;
+      const response: AxiosResponse<PterodactylServer> = await this.api.post('/servers', serverData);
+      
+      if (!response.data) {
+        throw new Error('Erro ao criar servidor: resposta da API está vazia');
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError('createServer', error);
     }
@@ -87,11 +102,16 @@ export class ServerManager extends PterodactylBaseClient {
 
   async updateServer(serverId: number, updateData: Partial<CreateServerRequest>): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.patch(
+      const response: AxiosResponse<PterodactylServer> = await this.api.patch(
         `/servers/${serverId}/details`, 
         updateData
       );
-      return response.data.data;
+      
+      if (!response.data) {
+        throw new Error(`Erro ao atualizar servidor ${serverId}`);
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError(`updateServer(${serverId})`, error);
     }
@@ -111,11 +131,16 @@ export class ServerManager extends PterodactylBaseClient {
     };
   }): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.patch(
+      const response: AxiosResponse<PterodactylServer> = await this.api.patch(
         `/servers/${serverId}/build`, 
         buildData
       );
-      return response.data.data;
+      
+      if (!response.data) {
+        throw new Error(`Erro ao atualizar build do servidor ${serverId}`);
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError(`updateServerBuild(${serverId})`, error);
     }
