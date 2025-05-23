@@ -51,10 +51,15 @@ export class StatsManager extends PterodactylBaseClient {
         throw new Error(`Servidor ${serverId} não encontrado ou dados inválidos`);
       }
       
-      const response: AxiosResponse<{ data: PterodactylServerStats }> = await this.clientApi.get(
+      const response: AxiosResponse<PterodactylServerStats> = await this.clientApi.get(
         `/servers/${server.attributes.identifier}/resources`
       );
-      return response.data.data;
+      
+      if (!response.data) {
+        throw new Error(`Stats não encontrados para servidor ${serverId}`);
+      }
+      
+      return response.data;
     } catch (error) {
       this.handleError(`getServerStats(${serverId})`, error);
     }
