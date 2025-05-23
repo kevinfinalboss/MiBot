@@ -7,6 +7,7 @@ import {
   PterodactylAllocation,
   PterodactylApiResponse
 } from '../../types/Pterodactyl';
+import { logger } from '../../utils/logger';
 
 export class NestManager extends PterodactylBaseClient {
 
@@ -109,6 +110,100 @@ export class NestManager extends PterodactylBaseClient {
       );
     } catch (error) {
       this.handleError('getMinecraftEggs', error);
+    }
+  }
+
+  async getTerrariaEggs(): Promise<PterodactylEgg[]> {
+    try {
+      const allEggs = await this.getAllEggs();
+      
+      const terrariaEggs = allEggs.filter(egg => 
+        egg.attributes.nest === 5 || 
+        egg.attributes.name.toLowerCase().includes('terraria')
+      );
+      
+      logger.info(`[NEST-MANAGER] Encontrados ${terrariaEggs.length} eggs de Terraria`);
+      
+      return terrariaEggs;
+    } catch (error) {
+      this.handleError('getTerrariaEggs', error);
+    }
+  }
+
+  async getRustEggs(): Promise<PterodactylEgg[]> {
+    try {
+      const allEggs = await this.getAllEggs();
+      
+      const rustEggs = allEggs.filter(egg => 
+        egg.attributes.nest === 4 || 
+        egg.attributes.name.toLowerCase().includes('rust')
+      );
+      
+      logger.info(`[NEST-MANAGER] Encontrados ${rustEggs.length} eggs de Rust`);
+      
+      return rustEggs;
+    } catch (error) {
+      this.handleError('getRustEggs', error);
+    }
+  }
+
+  async getSourceEngineEggs(): Promise<PterodactylEgg[]> {
+    try {
+      const allEggs = await this.getAllEggs();
+      
+      const sourceEggs = allEggs.filter(egg => 
+        egg.attributes.nest === 2 ||
+        egg.attributes.name.toLowerCase().includes('source') ||
+        egg.attributes.name.toLowerCase().includes('tf2') ||
+        egg.attributes.name.toLowerCase().includes('team fortress') ||
+        egg.attributes.name.toLowerCase().includes('insurgency')
+      );
+      
+      logger.info(`[NEST-MANAGER] Encontrados ${sourceEggs.length} eggs de Source Engine`);
+      
+      return sourceEggs;
+    } catch (error) {
+      this.handleError('getSourceEngineEggs', error);
+    }
+  }
+
+  async getVoiceServerEggs(): Promise<PterodactylEgg[]> {
+    try {
+      const allEggs = await this.getAllEggs();
+      
+      const voiceEggs = allEggs.filter(egg => 
+        egg.attributes.nest === 3 ||
+        egg.attributes.name.toLowerCase().includes('mumble') ||
+        egg.attributes.name.toLowerCase().includes('teamspeak') ||
+        egg.attributes.name.toLowerCase().includes('ts3')
+      );
+      
+      logger.info(`[NEST-MANAGER] Encontrados ${voiceEggs.length} eggs de Voice Server`);
+      
+      return voiceEggs;
+    } catch (error) {
+      this.handleError('getVoiceServerEggs', error);
+    }
+  }
+
+  async getGameEggsByType(gameType: 'minecraft' | 'terraria' | 'rust' | 'source' | 'voice'): Promise<PterodactylEgg[]> {
+    try {
+      switch (gameType) {
+        case 'minecraft':
+          return await this.getMinecraftEggs();
+        case 'terraria':
+          return await this.getTerrariaEggs();
+        case 'rust':
+          return await this.getRustEggs();
+        case 'source':
+          return await this.getSourceEngineEggs();
+        case 'voice':
+          return await this.getVoiceServerEggs();
+        default:
+          return [];
+      }
+    } catch (error) {
+      this.handleError(`getGameEggsByType(${gameType})`, error);
     }
   }
 
