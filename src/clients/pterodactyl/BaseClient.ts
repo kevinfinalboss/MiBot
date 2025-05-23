@@ -74,6 +74,6 @@ export class PterodactylBaseClient {
   protected handleError(operation: string, error: any): never {
     const message = error instanceof Error ? error.message : String(error);
     logger.error(`[Pterodactyl] Error in ${operation}: ${message}`);
-    throw error;
+    throw new Error(`Erro em ${operation}: ${message}`);
   }
 }
