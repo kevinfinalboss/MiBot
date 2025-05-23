@@ -10,7 +10,7 @@ import { MiClient } from '../../structures/MiClient';
 import { CommandContext } from './CommandContext';
 
 export type CommandType = 'SLASH' | 'PREFIX' | 'CONTEXT_MENU' | 'HYBRID';
-export type CommandCategoria = 'Util' | 'Moderação' | 'Administração' | 'Diversão' | 'Sistema';
+export type CommandCategoria = 'Util' | 'Moderação' | 'Administração' | 'Diversão' | 'Sistema' | 'Música' | 'Pterodactyl' | 'Outros' | 'Cloudflare';
 
 export interface CommandOptions {
   categoria: CommandCategoria;
