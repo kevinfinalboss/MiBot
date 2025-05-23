@@ -2,6 +2,7 @@ import { EmbedBuilder, TextChannel } from 'discord.js';
 import { Event } from '../../types/Event';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
+import { nowPlayingMessages } from '../../utils/musicState';
 
 const event: Event<'ready'> = {
   name: 'ready',
@@ -14,7 +15,7 @@ const event: Event<'ready'> = {
       return;
     }
     
-    miClient.lavalink.on('trackEnd', async (player, track) => {
+    miClient.lavalink.on('trackEnd', async (player, track, reason) => {
       try {
         if (!track) return;
         
@@ -25,13 +26,31 @@ const event: Event<'ready'> = {
           if (!channel || !(channel instanceof TextChannel)) return;
           
           const embed = new EmbedBuilder()
-            .setTitle('🎵 Música Finalizada')
-            .setColor('#0099ff')
-            .setDescription(`**[${track.info.title}](${track.info.uri})** terminou de tocar.`)
+            .setTitle('📭 Fila Finalizada')
+            .setColor('#FFA500')
+            .setDescription(`**[${track.info.title}](${track.info.uri})** foi a última música da fila.`)
+            .addFields(
+              { name: '🎵 Última música', value: `${track.info.author || 'Desconhecido'}`, inline: true },
+              { name: '⏱️ Status', value: 'Fila vazia', inline: true }
+            )
             .setTimestamp();
+
+          const existingMessageId = nowPlayingMessages.get(player.guildId);
           
-          await channel.send({ embeds: [embed] });
+          if (existingMessageId) {
+            try {
+              const message = await channel.messages.fetch(existingMessageId);
+              await message.edit({ embeds: [embed], components: [] });
+            } catch (error) {
+              await channel.send({ embeds: [embed] });
+            }
+          } else {
+            await channel.send({ embeds: [embed] });
+          }
+          
+          nowPlayingMessages.delete(player.guildId);
         }
+        
       } catch (error) {
         logger.error(`Erro no evento trackEnd: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       }
