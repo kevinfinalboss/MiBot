@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, TextChannel, AutocompleteInteraction } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, GuildMember, AutocompleteInteraction } from 'discord.js';
 import { Command } from '../../types/commands/Command';
 import { CommandContext } from '../../types/commands/CommandContext';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
-import { nowPlayingMessages } from '../../utils/musicState';
+import { updateNowPlayingEmbed } from '../../utils/updateNowPlaying';
 const YouTube = require('youtube-search-api');
 
 const command: Command = {
@@ -224,8 +224,6 @@ const command: Command = {
           await context.message!.reply({ embeds: [ephemeralEmbed] });
         }
         
-        await createInitialMusicEmbed(context, player, client);
-        
         if (!player.playing && !player.paused) {
           await player.play();
         }
@@ -233,25 +231,13 @@ const command: Command = {
         const track = res.tracks[0];
         player.queue.add(track);
 
-        const ephemeralEmbed = new EmbedBuilder()
-          .setTitle('🎵 Música Adicionada')
-          .setColor('#00FF88')
-          .setDescription(`**[${track.info.title}](${track.info.uri})**`)
-          .addFields(
-            { name: '👤 Adicionado por', value: `<@${member.id}>`, inline: true },
-            { name: '📍 Posição na fila', value: `#${player.queue.tracks.length}`, inline: true },
-            { name: '⏱️ Duração', value: formatTime(track.info.duration || 0), inline: true }
-          )
-          .setThumbnail(track.info.artworkUrl || `https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`)
-          .setTimestamp();
-
         if (context.isSlash) {
-          await context.interaction!.followUp({ embeds: [ephemeralEmbed], flags: 64 });
-        } else {
-          await context.message!.reply({ embeds: [ephemeralEmbed] });
+          await context.interaction!.deleteReply();
         }
-        
-        await createInitialMusicEmbed(context, player, client);
+
+        if (player.playing) {
+          await updateNowPlayingEmbed(client, player);
+        }
         
         if (!player.playing) {
           await player.play();
@@ -291,19 +277,6 @@ function formatTime(ms: number): string {
   }
 }
 
-function formatYouTubeDuration(duration: string): string {
-  if (!duration) return '';
-  
-  const parts = duration.split(':');
-  if (parts.length === 2) {
-    return duration;
-  } else if (parts.length === 3) {
-    return duration;
-  }
-  
-  return duration;
-}
-
 async function cleanupOldMusicMessages(channelId: string, client: MiClient) {
   try {
     const channel = await client.channels.fetch(channelId);
@@ -323,81 +296,6 @@ async function cleanupOldMusicMessages(channelId: string, client: MiClient) {
       }
     }
   } catch (error) {
-  }
-}
-
-async function createInitialMusicEmbed(context: CommandContext, player: any, client: MiClient) {
-  const currentTrack = player.queue.current || player.queue.tracks[0];
-  
-  const embed = new EmbedBuilder()
-    .setTitle('🎵 Player de Música')
-    .setColor('#00FF88')
-    .addFields(
-      { name: '📊 Fila', value: `${player.queue.tracks.length} música(s)`, inline: true },
-      { name: '🎧 Canal', value: `<#${player.voiceChannelId}>`, inline: true },
-      { name: '🔊 Volume', value: `${player.volume}%`, inline: true }
-    )
-    .setTimestamp();
-
-  if (currentTrack) {
-    embed.setDescription(`**[${currentTrack.info.title}](${currentTrack.info.uri})**`);
-    embed.setThumbnail(currentTrack.info.artworkUrl || `https://img.youtube.com/vi/${currentTrack.info.identifier}/maxresdefault.jpg`);
-  } else {
-    embed.setDescription('Preparando reprodução...');
-  }
-
-  const row = new ActionRowBuilder<ButtonBuilder>()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId('music_resume')
-        .setLabel('Retomar')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('▶️'),
-      new ButtonBuilder()
-        .setCustomId('music_pause')
-        .setLabel('Pausar')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('⏸️'),
-      new ButtonBuilder()
-        .setCustomId('music_stop')
-        .setLabel('Parar')
-        .setStyle(ButtonStyle.Danger)
-        .setEmoji('⏹️'),
-      new ButtonBuilder()
-        .setCustomId('music_queue')
-        .setLabel('Ver Fila')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📋')
-    );
-
-  let message;
-  if (context.isSlash) {
-    message = await context.interaction!.editReply({ embeds: [embed], components: [row] });
-  } else {
-    message = await context.message!.reply({ embeds: [embed], components: [row] });
-  }
-
-  nowPlayingMessages.set(player.guildId, message.id);
-}
-
-/**
- * Envia um embed simples de status para o usuário.
- */
-async function sendEmbed(context: CommandContext, title: string, description: string) {
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor('#9F59FF')
-    .setTimestamp();
-
-  if (context.isSlash) {
-    if (context.interaction!.deferred) {
-      await context.interaction!.editReply({ embeds: [embed] });
-    } else if (!context.interaction!.replied) {
-      await context.interaction!.reply({ embeds: [embed], flags: 64 });
-    }
-  } else {
-    await context.message!.reply({ embeds: [embed] });
   }
 }
 
