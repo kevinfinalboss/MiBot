@@ -2,6 +2,7 @@ import { EmbedBuilder, TextChannel } from 'discord.js';
 import { Event } from '../../types/Event';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
+import { nowPlayingMessages } from '../../utils/musicState';
 
 const event: Event<'ready'> = {
   name: 'ready',
@@ -14,20 +15,41 @@ const event: Event<'ready'> = {
       return;
     }
     
-    miClient.lavalink.on('playerDisconnect', async (player, oldVoiceChannelId) => {
+    miClient.lavalink.on('playerDisconnect', async (player: any, oldVoiceChannelId: string) => {
       try {
         const channel = await client.channels.fetch(player.textChannelId || '');
         if (channel && channel instanceof TextChannel) {
           const embed = new EmbedBuilder()
             .setTitle('🔌 Desconectado')
             .setColor('#FF6347')
-            .setDescription('Bot desconectado do canal de voz.')
+            .setDescription('Bot foi desconectado do canal de voz.')
+            .addFields(
+              { name: '📍 Canal anterior', value: `<#${oldVoiceChannelId}>`, inline: true },
+              { name: '⏱️ Desconectado em', value: new Date().toLocaleTimeString('pt-BR'), inline: true }
+            )
             .setTimestamp();
           
-          await channel.send({ embeds: [embed] });
+          const existingMessageId = nowPlayingMessages.get(player.guildId);
+          
+          if (existingMessageId) {
+            try {
+              const message = await channel.messages.fetch(existingMessageId);
+              await message.edit({ embeds: [embed], components: [] });
+            } catch (error) {
+              await channel.send({ embeds: [embed] });
+            }
+            nowPlayingMessages.delete(player.guildId);
+          } else {
+            await channel.send({ embeds: [embed] });
+          }
         }
         
-        player.destroy();
+        if (player.connected) {
+          player.destroy();
+        }
+        
+        logger.info(`Player desconectado no servidor ${player.guildId}`);
+        
       } catch (error) {
         logger.error(`Erro no evento playerDisconnect: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       }
