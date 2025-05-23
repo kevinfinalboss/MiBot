@@ -169,9 +169,13 @@ const command: Command = {
         const srvRecordData = {
           type: 'SRV',
           name: recordName,
-          content: `0 5 ${port} ${fullDomain}`,
-          ttl: 300
-        };
+          content: fullDomain,
+          ttl: 300,
+          priority: 0,
+          weight: 5,
+          port: port,
+          target: fullDomain
+        } as any;
 
         const aRecord = await client.cloudflare.dns.createDNSRecord(zoneId, aRecordData);
         const srvRecord = await client.cloudflare.dns.createDNSRecord(zoneId, srvRecordData);
