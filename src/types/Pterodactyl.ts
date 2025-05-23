@@ -31,11 +31,49 @@ export interface PterodactylServer {
     container: {
       startup_command: string;
       image: string;
-      installed: boolean;
+      installed: boolean | number;
       environment: Record<string, any>;
     };
     updated_at: string;
     created_at: string;
+    relationships?: {
+      user?: {
+        object: string;
+        data: PterodactylUser;
+      };
+      node?: {
+        object: string;
+        data: PterodactylNode;
+      };
+      allocations?: {
+        object: string;
+        data: PterodactylAllocation[];
+      };
+      nest?: {
+        object: string;
+        data: PterodactylNest;
+      };
+      egg?: {
+        object: string;
+        data: PterodactylEgg;
+      };
+      variables?: {
+        object: string;
+        data: PterodactylEggVariable[];
+      };
+      location?: {
+        object: string;
+        data: any;
+      };
+      databases?: {
+        object: string;
+        data: any[];
+      };
+      subusers?: {
+        object: string;
+        data: any[];
+      };
+    };
   };
 }
 
@@ -274,6 +312,43 @@ export interface PterodactylApiResponse<T> {
       per_page: number;
       current_page: number;
       total_pages: number;
+    };
+  };
+}
+
+export interface FormattedServerStats {
+  status: string;
+  suspended: boolean;
+  resources: {
+    memory: {
+      used: number;
+      limit: number;
+      percentage: number;
+      formatted: {
+        used: string;
+        limit: string;
+      };
+    };
+    cpu: {
+      usage: number;
+      percentage: number;
+    };
+    disk: {
+      used: number;
+      limit: number;
+      percentage: number;
+      formatted: {
+        used: string;
+        limit: string;
+      };
+    };
+    network: {
+      rx: string;
+      tx: string;
+    };
+    uptime: {
+      seconds: number;
+      formatted: string;
     };
   };
 }
