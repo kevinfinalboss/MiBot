@@ -31,7 +31,7 @@ const event: Event<'ready'> = {
           .addFields(
             { name: '👨‍🎤 Artista', value: track.info.author || 'Desconhecido', inline: true },
             { name: '⏱️ Duração', value: formatTime(track.info.duration || 0), inline: true },
-            { name: '📊 Fila', value: `${player.queue.tracks.length} música(s)`, inline: true },
+            { name: '📊 Na fila', value: `${player.queue.tracks.length} música(s)`, inline: true },
             { name: '🎧 Canal', value: `<#${player.voiceChannelId}>`, inline: true },
             { name: '🔊 Volume', value: `${player.volume}%`, inline: true },
             { name: '👤 Solicitado por', value: `<@${track.requester?.id || 'Desconhecido'}>`, inline: true }
@@ -41,9 +41,17 @@ const event: Event<'ready'> = {
         
         if (player.queue.tracks.length > 0) {
           const nextTrack = player.queue.tracks[0];
+          const totalDuration = player.queue.tracks.reduce((acc: number, track: any) => acc + (track.info.duration || 0), 0);
+          
           embed.addFields({
-            name: '⏭️ Próxima',
-            value: `**[${nextTrack.info.title}](${nextTrack.info.uri})**`,
+            name: '⏭️ Próxima na fila',
+            value: `**[${nextTrack.info.title}](${nextTrack.info.uri})**\n👨‍🎤 ${nextTrack.info.author || 'Desconhecido'}\n⏱️ Tempo restante: ${formatTime(totalDuration)}`,
+            inline: false
+          });
+        } else {
+          embed.addFields({
+            name: '📭 Fila vazia',
+            value: 'Adicione mais músicas com `/play`',
             inline: false
           });
         }
@@ -55,13 +63,13 @@ const event: Event<'ready'> = {
               .setLabel('Retomar')
               .setStyle(ButtonStyle.Success)
               .setEmoji('▶️')
-              .setDisabled(!player.paused),
+              .setDisabled(false),
             new ButtonBuilder()
               .setCustomId('music_pause')
               .setLabel('Pausar')
               .setStyle(ButtonStyle.Primary)
               .setEmoji('⏸️')
-              .setDisabled(player.paused),
+              .setDisabled(false),
             new ButtonBuilder()
               .setCustomId('music_skip')
               .setLabel('Pular')
@@ -72,12 +80,14 @@ const event: Event<'ready'> = {
               .setCustomId('music_stop')
               .setLabel('Parar')
               .setStyle(ButtonStyle.Danger)
-              .setEmoji('⏹️'),
+              .setEmoji('⏹️')
+              .setDisabled(false),
             new ButtonBuilder()
               .setCustomId('music_queue')
               .setLabel('Fila')
               .setStyle(ButtonStyle.Secondary)
               .setEmoji('📋')
+              .setDisabled(false)
           );
         
         const existingMessageId = nowPlayingMessages.get(player.guildId);
