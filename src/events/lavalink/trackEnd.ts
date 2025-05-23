@@ -15,23 +15,26 @@ const event: Event<'ready'> = {
       return;
     }
     
-    miClient.lavalink.on('trackEnd', async (player, track, reason) => {
+    miClient.lavalink.on('trackEnd', async (player: any, track: any, payload: any) => {
       try {
         if (!track) return;
         
-        logger.info(`Track finalizada: ${track.info.title} no servidor ${player.guildId}`);
+        logger.info(`Track finalizada: ${track.info.title} no servidor ${player.guildId} - Razão: ${payload.reason}`);
         
-        if (player.queue.tracks.length === 0) {
-          const channel = await client.channels.fetch(player.textChannelId || '');
-          if (!channel || !(channel instanceof TextChannel)) return;
-          
+        if (payload.reason === 'replaced') return;
+        
+        const channel = await client.channels.fetch(player.textChannelId || '');
+        if (!channel || !(channel instanceof TextChannel)) return;
+        
+        if (player.queue.tracks.length === 0 && payload.reason !== 'stopped') {
           const embed = new EmbedBuilder()
             .setTitle('📭 Fila Finalizada')
             .setColor('#FFA500')
             .setDescription(`**[${track.info.title}](${track.info.uri})** foi a última música da fila.`)
             .addFields(
               { name: '🎵 Última música', value: `${track.info.author || 'Desconhecido'}`, inline: true },
-              { name: '⏱️ Status', value: 'Fila vazia', inline: true }
+              { name: '⏱️ Status', value: 'Fila vazia', inline: true },
+              { name: '💡 Dica', value: 'Use `/play` para adicionar mais músicas!', inline: false }
             )
             .setTimestamp();
 
@@ -48,7 +51,9 @@ const event: Event<'ready'> = {
             await channel.send({ embeds: [embed] });
           }
           
-          nowPlayingMessages.delete(player.guildId);
+          setTimeout(() => {
+            nowPlayingMessages.delete(player.guildId);
+          }, 30000);
         }
         
       } catch (error) {
