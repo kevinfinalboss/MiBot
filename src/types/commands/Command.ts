@@ -4,6 +4,7 @@ import {
   SlashCommandBuilder,
   SlashCommandSubcommandsOnlyBuilder,
   ContextMenuCommandBuilder,
+  AutocompleteInteraction,
 } from 'discord.js';
 import { MiClient } from '../../structures/MiClient';
 import { CommandContext } from './CommandContext';
@@ -14,23 +15,20 @@ export type CommandCategoria = 'Util' | 'Moderação' | 'Administração' | 'Div
 export interface CommandOptions {
   categoria: CommandCategoria;
 
-  // Acesso
   adminOnly?: boolean;
   ownerOnly?: boolean;
   guildOnly?: boolean;
   dmOnly?: boolean;
   allowBots?: boolean;
 
-  // Execução
-  cooldown?: number; // em segundos
+  cooldown?: number;
   type: CommandType;
 
-  aliases?: string[]; // para prefix
-  userPermissions?: string[]; // permissões requeridas pelo autor
-  botPermissions?: string[];  // permissões requeridas pelo bot
+  aliases?: string[];
+  userPermissions?: string[];
+  botPermissions?: string[];
   enabled?: boolean;
 
-  // Visibilidade e ajuda
   visible?: boolean;
   usage?: string;
   examples?: string[];
@@ -48,5 +46,10 @@ export interface Command {
   execute: (
     client: MiClient,
     context: CommandContext
+  ) => Promise<void> | void;
+
+  executeAutocomplete?: (
+    client: MiClient,
+    interaction: AutocompleteInteraction
   ) => Promise<void> | void;
 }
