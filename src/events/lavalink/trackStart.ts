@@ -2,6 +2,7 @@ import { EmbedBuilder, TextChannel } from 'discord.js';
 import { Event } from '../../types/Event';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
+import { nowPlayingMessages } from '../../utils/musicState';
 
 const event: Event<'ready'> = {
   name: 'ready',
@@ -10,49 +11,53 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento trackStart');
+      logger.error('Lavalink não inicializado para evento trackEnd');
       return;
     }
     
-    miClient.lavalink.on('trackStart', async (player, track) => {
+    miClient.lavalink.on('trackEnd', async (player, track, reason) => {
       try {
         if (!track) return;
         
-        const channel = await client.channels.fetch(player.textChannelId || '');
-        if (!channel || !(channel instanceof TextChannel)) return;
+        logger.info(`Track finalizada: ${track.info.title} no servidor ${player.guildId}`);
         
-        const embed = new EmbedBuilder()
-          .setTitle('🎵 Tocando Agora')
-          .setColor('#00FF00')
-          .setDescription(`**[${track.info.title}](${track.info.uri})**`)
-          .addFields(
-            { name: '👨‍🎤 Artista', value: track.info.author || 'Desconhecido', inline: true },
-            { name: '⏱️ Duração', value: formatTime(track.info.duration), inline: true },
-            { name: '🔊 Volume', value: `${player.volume}%`, inline: true }
-          )
-          .setThumbnail(`https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`)
-          .setTimestamp();
+        if (player.queue.tracks.length === 0) {
+          const channel = await client.channels.fetch(player.textChannelId || '');
+          if (!channel || !(channel instanceof TextChannel)) return;
+          
+          const embed = new EmbedBuilder()
+            .setTitle('📭 Fila Finalizada')
+            .setColor('#FFA500')
+            .setDescription(`**[${track.info.title}](${track.info.uri})** foi a última música da fila.`)
+            .addFields(
+              { name: '🎵 Última música', value: `${track.info.author || 'Desconhecido'}`, inline: true },
+              { name: '⏱️ Status', value: 'Fila vazia', inline: true }
+            )
+            .setTimestamp();
+
+          const existingMessageId = nowPlayingMessages.get(player.guildId);
+          
+          if (existingMessageId) {
+            try {
+              const message = await channel.messages.fetch(existingMessageId);
+              await message.edit({ embeds: [embed], components: [] });
+            } catch (error) {
+              await channel.send({ embeds: [embed] });
+            }
+          } else {
+            await channel.send({ embeds: [embed] });
+          }
+          
+          nowPlayingMessages.delete(player.guildId);
+        }
         
-        await channel.send({ embeds: [embed] });
       } catch (error) {
-        logger.error(`Erro no evento trackStart: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`Erro no evento trackEnd: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       }
     });
     
-    logger.info('Evento trackStart do Lavalink registrado com sucesso');
+    logger.info('Evento trackEnd do Lavalink registrado com sucesso');
   }
 };
-
-function formatTime(ms: number): string {
-  const seconds = Math.floor((ms / 1000) % 60);
-  const minutes = Math.floor((ms / (1000 * 60)) % 60);
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  } else {
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-}
 
 export default event;
