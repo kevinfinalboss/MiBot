@@ -393,7 +393,6 @@ const command: Command = {
               .addFields(
                 { name: '🆔 ID do Servidor', value: `${recentServer.attributes.id}`, inline: true },
                 { name: '🔗 UUID', value: recentServer.attributes.uuid, inline: true },
-                { name: '📍 Status', value: recentServer.attributes.status || 'installing', inline: true },
                 { name: '👤 Proprietário', value: user.attributes.email, inline: true },
                 { name: '🖥️ Node', value: `${selectedNode.attributes.name} (${nodeId ? 'Específico' : 'Auto-selecionado'})`, inline: true },
                 { name: '🥚 Egg', value: selectedEgg.attributes.name, inline: true },
