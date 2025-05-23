@@ -5,7 +5,7 @@ import { Event } from '../types/Event';
 import { logger } from '../utils/logger';
 
 export async function loadEvents(client: MiClient): Promise<void> {
-  const eventDirs = ['client', 'guild', 'interaction', 'message'];
+  const eventDirs = ['client', 'guild', 'interaction', 'message', 'lavalink'];
   const loadedEvents: Set<string> = new Set();
   let eventCount = 0;
   
@@ -23,6 +23,8 @@ export async function loadEvents(client: MiClient): Promise<void> {
     for (const file of eventFiles) {
       try {
         const eventPath = path.join(eventDir, file);
+        delete require.cache[require.resolve(eventPath)];
+        
         const event = await import(eventPath) as { default: Event<any> };
         
         if (!event.default) {
@@ -32,19 +34,28 @@ export async function loadEvents(client: MiClient): Promise<void> {
         
         const eventInstance = event.default;
         const eventName = eventInstance.name;
+        const eventKey = `${dir}-${eventName}-${file}`;
         
-        if (loadedEvents.has(eventName)) {
-          logger.warn('[Events] Evento duplicado encontrado: ' + eventName);
+        if (loadedEvents.has(eventKey)) {
+          logger.warn('[Events] Evento duplicado encontrado: ' + eventKey);
           continue;
         }
         
-        if (eventInstance.once) {
-          client.once(eventName, (...args) => eventInstance.execute(...args));
+        if (dir === 'lavalink') {
+          if (eventInstance.once) {
+            client.once(eventName, (...args: any[]) => eventInstance.execute(client, ...args));
+          } else {
+            client.on(eventName, (...args: any[]) => eventInstance.execute(client, ...args));
+          }
         } else {
-          client.on(eventName, (...args) => eventInstance.execute(...args));
+          if (eventInstance.once) {
+            client.once(eventName, (...args: any[]) => eventInstance.execute(...args));
+          } else {
+            client.on(eventName, (...args: any[]) => eventInstance.execute(...args));
+          }
         }
         
-        loadedEvents.add(eventName);
+        loadedEvents.add(eventKey);
         eventCount++;
         logger.info('[Events] Evento carregado: ' + eventName + ' (' + dir + '/' + file + ')');
       } catch (error) {
