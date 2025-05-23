@@ -7,6 +7,7 @@ import {
 import { Command } from '../types/commands/Command';
 import { BotConfig } from '../types/Config';
 import { LavalinkManager } from 'lavalink-client';
+import { PterodactylClient } from '../clients/pterodactyl/PterodactylClient';
 import { logger } from '../utils/logger';
 
 export class MiClient extends Client {
@@ -17,6 +18,7 @@ export class MiClient extends Client {
   public cooldowns = new Collection<string, number>();
 
   public lavalink: LavalinkManager;
+  public pterodactyl?: PterodactylClient;
 
   constructor(config: BotConfig) {
     super({
@@ -65,12 +67,25 @@ export class MiClient extends Client {
       }
     });
 
+    if (config.pterodactyl?.url && config.pterodactyl?.apiKey) {
+      this.pterodactyl = new PterodactylClient(
+        config.pterodactyl.url,
+        config.pterodactyl.apiKey
+      );
+    } else {
+      logger.warn('[Pterodactyl] Configuração não encontrada - recursos do Pterodactyl desabilitados');
+    }
+
     this.once('ready', async () => {
       await this.lavalink.init({
         id: this.user!.id,
         username: this.user!.tag
       });
       logger.success('Lavalink conectado como ' + this.user!.tag);
+
+      if (this.pterodactyl) {
+        await this.pterodactyl.initialize();
+      }
     });
 
     this.on('raw', (d) => {
