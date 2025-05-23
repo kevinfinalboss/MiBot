@@ -323,7 +323,6 @@ async function cleanupOldMusicMessages(channelId: string, client: MiClient) {
       }
     }
   } catch (error) {
-    // Ignorar erros de cleanup
   }
 }
 
