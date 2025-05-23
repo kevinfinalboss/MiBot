@@ -14,7 +14,6 @@ export async function loadCommands(client: MiClient): Promise<void> {
     return;
   }
   
-  const commandFolders = fs.readdirSync(commandsPath);
   let commandCount = 0;
   const commandsToRegister: any[] = [];
   const loadedCommandNames: Set<string> = new Set();
@@ -24,63 +23,88 @@ export async function loadCommands(client: MiClient): Promise<void> {
   client.commands.clear();
   client.aliases.clear();
   
-  for (const folder of commandFolders) {
-    const categoryPath = path.join(commandsPath, folder);
-    if (!fs.statSync(categoryPath).isDirectory()) continue;
+  async function loadCommandsRecursively(dirPath: string, relativePath: string = ''): Promise<void> {
+    const items = fs.readdirSync(dirPath);
     
-    const commandFiles = fs.readdirSync(categoryPath).filter(file => file.endsWith('.ts') || file.endsWith('.js'));
-    
-    for (const file of commandFiles) {
-      try {
-        const commandPath = path.join(categoryPath, file);
-        const command = await import(commandPath) as { default: Command };
-        
-        if (!command.default) {
-          logger.warn('[Comandos] Comando em ' + file + ' não tem uma exportação padrão');
-          continue;
-        }
-        
-        const commandInstance = command.default;
-        
-        if (commandInstance.data) {
-          const commandName = commandInstance.data.name || file.split('.')[0];
-          
-          if (loadedCommandNames.has(commandName)) {
-            logger.warn('[Comandos] Comando duplicado encontrado: ' + commandName);
-            continue;
-          }
-          
-          client.commands.set(commandName, commandInstance);
-          loadedCommandNames.add(commandName);
-          
-          if (commandInstance.options.aliases && Array.isArray(commandInstance.options.aliases)) {
-            for (const alias of commandInstance.options.aliases) {
-              if (client.aliases.has(alias)) {
-                logger.warn('[Comandos] Alias duplicado encontrado: ' + alias);
-              } else {
-                client.aliases.set(alias, commandName);
-              }
-            }
-          }
-          
-          if (commandInstance.options.type === 'SLASH' || commandInstance.options.type === 'HYBRID') {
-            if (commandInstance.data) {
-              commandsToRegister.push(commandInstance.data.toJSON());
-            }
-          }
-          
-          commandCount++;
-          logger.info('[Comandos] Comando carregado: ' + commandName + ' (' + folder + '/' + file + ')');
-        } else {
-          logger.warn('[Comandos] Comando em ' + file + ' não tem data definida');
-        }
-      } catch (error) {
-        logger.error('[Comandos] Erro ao carregar comando ' + file + ': ' + (error instanceof Error ? error.stack || error.message : String(error)));
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item);
+      const itemStat = fs.statSync(itemPath);
+      const currentRelativePath = relativePath ? `${relativePath}/${item}` : item;
+      
+      if (itemStat.isDirectory()) {
+        await loadCommandsRecursively(itemPath, currentRelativePath);
+      } else if (itemStat.isFile() && (item.endsWith('.ts') || item.endsWith('.js'))) {
+        await loadSingleCommand(itemPath, currentRelativePath);
       }
     }
   }
   
-  logger.info('[Comandos] Total de ' + commandCount + ' comandos carregados com sucesso!');
+  async function loadSingleCommand(commandPath: string, relativePath: string): Promise<void> {
+    try {
+      const command = await import(commandPath) as { default: Command };
+      
+      if (!command.default) {
+        logger.warn(`[Comandos] Comando em ${relativePath} não tem uma exportação padrão`);
+        return;
+      }
+      
+      const commandInstance = command.default;
+      
+      if (!commandInstance.data) {
+        logger.warn(`[Comandos] Comando em ${relativePath} não tem data definida`);
+        return;
+      }
+      
+      const commandName = commandInstance.data.name || path.basename(relativePath, path.extname(relativePath));
+      
+      if (loadedCommandNames.has(commandName)) {
+        logger.warn(`[Comandos] Comando duplicado encontrado: ${commandName} em ${relativePath}`);
+        return;
+      }
+      
+      client.commands.set(commandName, commandInstance);
+      loadedCommandNames.add(commandName);
+      
+      if (commandInstance.options.aliases && Array.isArray(commandInstance.options.aliases)) {
+        for (const alias of commandInstance.options.aliases) {
+          if (client.aliases.has(alias)) {
+            logger.warn(`[Comandos] Alias duplicado encontrado: ${alias} para comando ${commandName}`);
+          } else {
+            client.aliases.set(alias, commandName);
+          }
+        }
+      }
+      
+      if (commandInstance.options.type === 'SLASH' || commandInstance.options.type === 'HYBRID') {
+        if (commandInstance.data) {
+          commandsToRegister.push(commandInstance.data.toJSON());
+        }
+      }
+      
+      commandCount++;
+      
+      const pathParts = relativePath.split('/');
+      const category = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : 'root';
+      const fileName = pathParts[pathParts.length - 1];
+      
+      logger.info(`[Comandos] ✅ ${commandName} carregado (${category}/${fileName})`);
+      
+    } catch (error) {
+      logger.error(`[Comandos] ❌ Erro ao carregar comando ${relativePath}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    }
+  }
+  
+  await loadCommandsRecursively(commandsPath);
+  
+  const categories = Array.from(client.commands.values())
+    .map(cmd => cmd.options.categoria || 'Sem categoria')
+    .reduce((acc, cat) => {
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  
+  logger.info(`[Comandos] 📊 Total: ${commandCount} comandos carregados com sucesso!`);
+  logger.info(`[Comandos] 📁 Categorias: ${Object.entries(categories).map(([cat, count]) => `${cat} (${count})`).join(', ')}`);
   
   if (client.isReady()) {
     await syncSlashCommands(client, commandsToRegister);
@@ -103,7 +127,7 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
       return;
     }
     
-    logger.info('[Comandos] Iniciando sincronização de comandos slash com a API do Discord...');
+    logger.info(`[Comandos] 🔄 Iniciando sincronização de ${commandsToRegister.length} comandos slash...`);
     
     const existingCommands = await rest.get(
       Routes.applicationCommands(clientId)
@@ -120,7 +144,10 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
       if (!existingCommandsMap.has(cmd.name)) {
         commandsToAdd.push(cmd);
       } else {
-        commandsToUpdate.push(cmd);
+        const existingCmd = existingCommandsMap.get(cmd.name)!;
+        if (existingCmd.description !== cmd.description) {
+          commandsToUpdate.push(cmd);
+        }
       }
     }
     
@@ -131,19 +158,19 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
     });
     
     if (commandsToAdd.length > 0) {
-      logger.info('[Comandos] Registrando ' + commandsToAdd.length + ' novos comandos slash...');
+      logger.info(`[Comandos] ➕ Registrando ${commandsToAdd.length} novos comandos slash...`);
       
       for (const cmd of commandsToAdd) {
         await rest.post(
           Routes.applicationCommands(clientId),
           { body: cmd }
         );
-        logger.info('[Comandos] Comando slash registrado: ' + cmd.name);
+        logger.info(`[Comandos] ✅ Comando slash registrado: ${cmd.name}`);
       }
     }
     
     if (commandsToUpdate.length > 0) {
-      logger.info('[Comandos] Atualizando ' + commandsToUpdate.length + ' comandos slash existentes...');
+      logger.info(`[Comandos] 🔄 Atualizando ${commandsToUpdate.length} comandos slash existentes...`);
       
       for (const cmd of commandsToUpdate) {
         const existingCmd = existingCommandsMap.get(cmd.name);
@@ -151,25 +178,29 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
           Routes.applicationCommand(clientId, existingCmd!.id),
           { body: cmd }
         );
-        logger.info('[Comandos] Comando slash atualizado: ' + cmd.name);
+        logger.info(`[Comandos] ✅ Comando slash atualizado: ${cmd.name}`);
       }
     }
     
     if (commandsToRemove.length > 0) {
-      logger.info('[Comandos] Removendo ' + commandsToRemove.length + ' comandos slash obsoletos...');
+      logger.info(`[Comandos] 🗑️ Removendo ${commandsToRemove.length} comandos slash obsoletos...`);
       
       for (const cmdId of commandsToRemove) {
         await rest.delete(
           Routes.applicationCommand(clientId, cmdId)
         );
-        logger.info('[Comandos] Comando slash removido: ID ' + cmdId);
+        logger.info(`[Comandos] ✅ Comando slash removido: ID ${cmdId}`);
       }
     }
     
-    logger.info('[Comandos] Sincronização de comandos slash concluída com sucesso!');
-    logger.info('[Comandos] ' + commandsToAdd.length + ' comandos adicionados, ' + commandsToUpdate.length + ' atualizados, ' + commandsToRemove.length + ' removidos');
+    logger.info('[Comandos] 🎉 Sincronização de comandos slash concluída com sucesso!');
+    logger.info(`[Comandos] 📊 Resumo: ${commandsToAdd.length} adicionados, ${commandsToUpdate.length} atualizados, ${commandsToRemove.length} removidos`);
+    
+    if (commandsToAdd.length === 0 && commandsToUpdate.length === 0 && commandsToRemove.length === 0) {
+      logger.info('[Comandos] ℹ️ Todos os comandos slash já estão sincronizados');
+    }
     
   } catch (error) {
-    logger.error('[Comandos] Erro ao sincronizar comandos slash: ' + (error instanceof Error ? error.stack || error.message : String(error)));
+    logger.error(`[Comandos] ❌ Erro ao sincronizar comandos slash: ${error instanceof Error ? error.stack || error.message : String(error)}`);
   }
 }
