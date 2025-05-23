@@ -147,13 +147,13 @@ export class StatsManager extends PterodactylBaseClient {
 
   private async getServerBasicInfo(serverId: number): Promise<PterodactylServer> {
     try {
-      const response: AxiosResponse<{ data: PterodactylServer }> = await this.api.get(`/servers/${serverId}`);
+      const response: AxiosResponse<PterodactylServer> = await this.api.get(`/servers/${serverId}`);
       
-      if (!response.data || !response.data.data) {
+      if (!response.data) {
         throw new Error(`Resposta inválida da API para servidor ${serverId}`);
       }
       
-      const server = response.data.data;
+      const server = response.data;
       if (!server.attributes) {
         throw new Error(`Servidor ${serverId} não possui attributes válidos`);
       }
