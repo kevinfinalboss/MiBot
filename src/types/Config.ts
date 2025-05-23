@@ -20,7 +20,6 @@ export interface BotConfig {
     autoPlay: boolean;
   };
   cloudflare: {
-    zoneId: string;
     apiToken: string;
   };
   pterodactyl: {
