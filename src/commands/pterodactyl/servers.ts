@@ -21,6 +21,7 @@ const command: Command = {
           { name: 'Online', value: 'running' },
           { name: 'Offline', value: 'offline' },
           { name: 'Suspenso', value: 'suspended' },
+          { name: 'Instalando', value: 'installing' },
           { name: 'Todos', value: 'all' }
         )
     )
@@ -70,31 +71,52 @@ const command: Command = {
       const statusFilter = context.isSlash ? context.interaction!.options.getString('status') || 'all' : 'all';
       const pagina = context.isSlash ? context.interaction!.options.getInteger('pagina') || 1 : 1;
 
+      logger.info(`[PTERO-SERVERS] Buscando servidores - buscar: ${buscar}, status: ${statusFilter}, pagina: ${pagina}`);
+
       let servers;
       let title = '🖥️ Servidores do Painel';
 
       if (buscar) {
         servers = await client.pterodactyl.servers.searchServersByName(buscar);
+        logger.info(`[PTERO-SERVERS] Busca por nome retornou: ${servers.length} servidores`);
         title += ` - Busca: "${buscar}"`;
       } else {
         const serversResponse = await client.pterodactyl.servers.getServers(pagina, 20);
+        logger.info(`[PTERO-SERVERS] API retornou: ${JSON.stringify(serversResponse, null, 2)}`);
+        
         servers = serversResponse.data;
+        logger.info(`[PTERO-SERVERS] Extraído ${servers.length} servidores da resposta`);
+        
+        if (servers.length > 0) {
+          logger.info(`[PTERO-SERVERS] Primeiro servidor: ${JSON.stringify(servers[0], null, 2)}`);
+        }
       }
 
       if (statusFilter !== 'all') {
         if (statusFilter === 'suspended') {
           servers = servers.filter(server => server.attributes.suspended);
-        } else {
-          const serverStats = await Promise.allSettled(
-            servers.map(server => client.pterodactyl!.stats.getServerStats(server.attributes.id))
+        } else if (statusFilter === 'installing') {
+          servers = servers.filter(server => 
+            !server.attributes.container?.installed || 
+            !server.attributes.container?.installed === false || 
+            server.attributes.container?.installed === 0
           );
-          
-          servers = servers.filter((server, index) => {
-            const stat = serverStats[index];
-            if (stat.status === 'fulfilled') {
-              return stat.value.attributes.current_state === statusFilter;
+        } else {
+          const serverStatsPromises = servers.map(async (server) => {
+            try {
+              const stats = await client.pterodactyl!.stats.getServerStats(server.attributes.id);
+              return { serverId: server.attributes.id, state: stats.attributes.current_state };
+            } catch (error) {
+              return { serverId: server.attributes.id, state: 'unknown' };
             }
-            return false;
+          });
+          
+          const serverStats = await Promise.all(serverStatsPromises);
+          const statsMap = new Map(serverStats.map(s => [s.serverId, s.state]));
+          
+          servers = servers.filter(server => {
+            const state = statsMap.get(server.attributes.id);
+            return state === statusFilter;
           });
         }
         title += ` - Status: ${statusFilter}`;
@@ -123,52 +145,87 @@ const command: Command = {
         let statusText = '❓ Desconhecido';
         let statusEmoji = '⚪';
 
-        try {
-          const stats = await client.pterodactyl.stats.getServerStats(server.attributes.id);
-          const state = stats.attributes.current_state;
-          
-          switch (state) {
-            case 'running':
-              statusText = 'Online';
-              statusEmoji = '🟢';
-              break;
-            case 'offline':
-              statusText = 'Offline';
-              statusEmoji = '🔴';
-              break;
-            case 'starting':
-              statusText = 'Iniciando';
-              statusEmoji = '🟡';
-              break;
-            case 'stopping':
-              statusText = 'Parando';
-              statusEmoji = '🟠';
-              break;
-            default:
-              statusText = state;
-              statusEmoji = '⚪';
-          }
-        } catch (error) {
-          statusText = 'Erro';
-          statusEmoji = '❌';
-        }
-
         if (server.attributes.suspended) {
           statusText = 'Suspenso';
           statusEmoji = '⏸️';
+        } else {
+          const installed = server.attributes.container?.installed;
+          if (installed === false || installed === 0 || installed === undefined) {
+            statusText = 'Instalando';
+            statusEmoji = '🔄';
+          } else {
+            try {
+              const stats = await client.pterodactyl.stats.getServerStats(server.attributes.id);
+              const state = stats.attributes.current_state;
+              
+              switch (state) {
+                case 'running':
+                  statusText = 'Online';
+                  statusEmoji = '🟢';
+                  break;
+                case 'offline':
+                  statusText = 'Offline';
+                  statusEmoji = '🔴';
+                  break;
+                case 'starting':
+                  statusText = 'Iniciando';
+                  statusEmoji = '🟡';
+                  break;
+                case 'stopping':
+                  statusText = 'Parando';
+                  statusEmoji = '🟠';
+                  break;
+                default:
+                  statusText = state;
+                  statusEmoji = '⚪';
+              }
+            } catch (error) {
+              statusText = 'Stats indisponíveis';
+              statusEmoji = '⚠️';
+            }
+          }
         }
 
         const memoryGB = (server.attributes.limits.memory / 1024).toFixed(1);
         const diskGB = (server.attributes.limits.disk / 1024).toFixed(1);
+        const cpuLimit = server.attributes.limits.cpu;
+
+        let nodeInfo = 'N/A';
+        let userInfo = 'N/A';
+        let allocationInfo = 'N/A';
+        
+        try {
+          if (server.attributes.relationships?.user?.data?.attributes) {
+            const user = server.attributes.relationships.user.data.attributes;
+            userInfo = `${user.first_name} ${user.last_name}`.trim() || user.email;
+          }
+          
+          if (server.attributes.relationships?.node?.data?.attributes) {
+            nodeInfo = server.attributes.relationships.node.data.attributes.name;
+          } else {
+            nodeInfo = `Node ${server.attributes.node}`;
+          }
+
+          if (server.attributes.relationships?.allocations?.data?.[0]?.attributes) {
+            const alloc = server.attributes.relationships.allocations.data[0].attributes;
+            allocationInfo = `${alloc.ip}:${alloc.port}`;
+          }
+        } catch (error) {
+          logger.warn(`Erro ao obter relacionamentos do servidor ${server.attributes.id}: ${error}`);
+        }
+
+        const dockerImage = server.attributes.container?.image || 'N/A';
+        const shortImage = dockerImage.includes('/') ? dockerImage.split('/').pop()?.split(':')[0] || dockerImage : dockerImage;
 
         embed.addFields({
           name: `${statusEmoji} ${server.attributes.name}`,
-          value: `**ID:** ${server.attributes.id}\n` +
-                 `**Status:** ${statusText}\n` +
-                 `**Recursos:** ${memoryGB}GB RAM, ${diskGB}GB Disco\n` +
-                 `**CPU:** ${server.attributes.limits.cpu}%\n` +
-                 `**Node:** ${server.attributes.node}\n` +
-                 `**Criado:** ${new Date(server.attributes.created_at).toLocaleDateString('pt-BR')}`,
+          value: `┌─ **ID:** \`${server.attributes.id}\` │ **Status:** ${statusText}\n` +
+                 `├─ **👤 Proprietário:** ${userInfo}\n` +
+                 `├─ **🌐 Endereço:** \`${allocationInfo}\`\n` +
+                 `├─ **💾 Recursos:** ${memoryGB}GB RAM • ${diskGB}GB Disco • ${cpuLimit}% CPU\n` +
+                 `├─ **🖥️ Node:** ${nodeInfo}\n` +
+                 `├─ **🐳 Imagem:** \`${shortImage}\`\n` +
+                 `└─ **📅 Criado:** ${new Date(server.attributes.created_at).toLocaleDateString('pt-BR')}`,
           inline: true
         });
       }
