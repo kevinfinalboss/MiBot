@@ -1,8 +1,10 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, TextChannel, AutocompleteInteraction } from 'discord.js';
 import { Command } from '../../types/commands/Command';
 import { CommandContext } from '../../types/commands/CommandContext';
 import { MiClient } from '../../structures/MiClient';
 import { logger } from '../../utils/logger';
+import { nowPlayingMessages } from '../../utils/musicState';
+const YouTube = require('youtube-search-api');
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -11,7 +13,8 @@ const command: Command = {
     .addStringOption(option => 
       option.setName('query')
         .setDescription('Nome ou URL da música/playlist')
-        .setRequired(true)) as SlashCommandBuilder,
+        .setRequired(true)
+        .setAutocomplete(true)) as SlashCommandBuilder,
 
   options: {
     categoria: 'Util',
@@ -24,22 +27,114 @@ const command: Command = {
     examples: ['play lofi', 'play https://www.youtube.com/watch?v=dQw4w9WgXcQ']
   },
 
+  async executeAutocomplete(client: MiClient, interaction: AutocompleteInteraction) {
+    try {
+      if (interaction.responded) return;
+      
+      const focusedOption = interaction.options.getFocused(true);
+      
+      if (focusedOption.name !== 'query') {
+        await interaction.respond([]);
+        return;
+      }
+
+      const query = focusedOption.value;
+      
+      if (!query || query.length < 2) {
+        await interaction.respond([]);
+        return;
+      }
+
+      const searchResults = await YouTube.GetListByKeyword(query, false, 10);
+      
+      if (!searchResults || !searchResults.items || searchResults.items.length === 0) {
+        await interaction.respond([{ name: "Nenhum resultado encontrado", value: "no_results" }]);
+        return;
+      }
+
+      const choices = searchResults.items.slice(0, 10).map((result: any) => {
+        const title = result.title ? 
+          (result.title.length > 60 ? result.title.substring(0, 57) + '...' : result.title) 
+          : 'Título desconhecido';
+        
+        const author = result.channelTitle ? 
+          (result.channelTitle.length > 25 ? result.channelTitle.substring(0, 22) + '...' : result.channelTitle)
+          : 'Canal desconhecido';
+
+        const displayName = `${title} - ${author}`;
+        const videoUrl = result.id ? `https://www.youtube.com/watch?v=${result.id}` : result.title || 'error';
+
+        return {
+          name: displayName.slice(0, 100),
+          value: videoUrl
+        };
+      });
+
+      if (!interaction.responded) {
+        await interaction.respond(choices);
+      }
+      
+    } catch (error) {
+      logger.error(`Erro no autocomplete: ${error instanceof Error ? error.message : String(error)}`);
+      if (!interaction.responded) {
+        try {
+          await interaction.respond([{ name: "Erro ao buscar resultados", value: "error" }]);
+        } catch (respondError) {
+        }
+      }
+    }
+  },
+
   async execute(client: MiClient, context: CommandContext) {
+    if (context.isSlash && !context.interaction!.deferred && !context.interaction!.replied) {
+      await context.interaction!.deferReply();
+    }
+
     const member = context.member;
     if (!member || !(member instanceof GuildMember)) {
-      await sendErrorEmbed(context, '⚠️ Erro', 'Você precisa estar em um servidor para usar este comando!');
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Erro')
+        .setDescription('Você precisa estar em um servidor para usar este comando!')
+        .setColor('#FF0000')
+        .setTimestamp();
+
+      if (context.isSlash) {
+        await context.interaction!.reply({ embeds: [errorEmbed], flags: 64 });
+      } else {
+        await context.message!.reply({ embeds: [errorEmbed] });
+      }
       return;
     }
 
     const voiceChannel = member.voice.channel;
     if (!voiceChannel) {
-      await sendErrorEmbed(context, '⚠️ Erro', 'Você precisa estar em um canal de voz para usar este comando!');
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Erro')
+        .setDescription('Você precisa estar em um canal de voz para usar este comando!')
+        .setColor('#FF0000')
+        .setTimestamp();
+
+      if (context.isSlash) {
+        await context.interaction!.reply({ embeds: [errorEmbed], flags: 64 });
+      } else {
+        await context.message!.reply({ embeds: [errorEmbed] });
+      }
       return;
     }
 
     const permissions = voiceChannel.permissionsFor(client.user!.id);
     if (!permissions?.has('Connect') || !permissions.has('Speak')) {
-      await sendErrorEmbed(context, '⚠️ Erro', 'Não tenho permissão para entrar ou falar no seu canal de voz!');
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Erro')
+        .setDescription('Não tenho permissão para entrar ou falar no seu canal de voz!')
+        .setColor('#FF0000')
+        .setTimestamp();
+
+      if (context.isSlash) {
+        await context.interaction!.reply({ embeds: [errorEmbed], flags: 64 });
+      } else {
+        await context.message!.reply({ embeds: [errorEmbed] });
+      }
       return;
     }
 
@@ -49,22 +144,33 @@ const command: Command = {
     } else if (context.args.length > 0) {
       query = context.args.join(' ');
     } else {
-      await sendErrorEmbed(context, '⚠️ Erro', 'Por favor, forneça o nome ou URL da música!');
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Erro')
+        .setDescription('Por favor, forneça o nome ou URL da música!')
+        .setColor('#FF0000')
+        .setTimestamp();
+
+      if (context.isSlash) {
+        await context.interaction!.reply({ embeds: [errorEmbed], flags: 64 });
+      } else {
+        await context.message!.reply({ embeds: [errorEmbed] });
+      }
       return;
     }
 
-    await sendEmbed(context, '🔍 Procurando...', `Procurando por: \`${query}\``);
-
     try {
-      const player = client.lavalink.createPlayer({
-        guildId: context.guildId!,
-        voiceChannelId: voiceChannel.id,
-        textChannelId: context.channelId,
-        selfDeaf: true,
-        volume: 80
-      });
-
-      player.connect();
+      let player = client.lavalink.getPlayer(context.guildId!);
+      
+      if (!player) {
+        player = client.lavalink.createPlayer({
+          guildId: context.guildId!,
+          voiceChannelId: voiceChannel.id,
+          textChannelId: context.channelId,
+          selfDeaf: true,
+          volume: 80
+        });
+        player.connect();
+      }
 
       const res = await player.search({
         query: query,
@@ -72,9 +178,21 @@ const command: Command = {
       }, member);
 
       if (res.loadType === 'error' || res.loadType === 'empty') {
-        await sendErrorEmbed(context, '❌ Não Encontrado', `Nenhum resultado encontrado para: \`${query}\``);
+        const errorEmbed = new EmbedBuilder()
+          .setTitle('❌ Não Encontrado')
+          .setDescription(`Nenhum resultado encontrado para: \`${query}\``)
+          .setColor('#FF0000')
+          .setTimestamp();
+
+        if (context.isSlash) {
+          await context.interaction!.editReply({ embeds: [errorEmbed] });
+        } else {
+          await context.message!.reply({ embeds: [errorEmbed] });
+        }
         return;
       }
+
+      await cleanupOldMusicMessages(context.channelId, client);
 
       if (res.loadType === 'playlist') {
         const playlist = res.playlist!;
@@ -84,96 +202,56 @@ const command: Command = {
         }
         
         const totalDuration = res.tracks.reduce((acc: number, track: any) => acc + (track.info.duration || 0), 0);
-        const queuePosition = player.queue.tracks.length - res.tracks.length + 1;
         
-        const embed = new EmbedBuilder()
-          .setTitle('📋 Playlist Adicionada à Fila')
+        const ephemeralEmbed = new EmbedBuilder()
+          .setTitle('📋 Playlist Adicionada')
           .setColor('#9F59FF')
           .setDescription(`**${playlist.name}**`)
           .addFields(
-            { name: '👤 Solicitado por', value: `<@${member.id}>`, inline: true },
             { name: '🎵 Total de faixas', value: `${res.tracks.length} músicas`, inline: true },
             { name: '⏱️ Duração total', value: formatTime(totalDuration), inline: true },
-            { name: '📍 Posição na fila', value: `${queuePosition} - ${queuePosition + res.tracks.length - 1}`, inline: true },
-            { name: '🎧 Canal de voz', value: voiceChannel.name, inline: true },
-            { name: '📊 Fila atual', value: `${player.queue.tracks.length} música(s)`, inline: true }
+            { name: '👤 Adicionado por', value: `<@${member.id}>`, inline: true }
           )
-          .setFooter({ text: `${res.tracks.length} faixas adicionadas` })
           .setTimestamp();
 
         if (playlist.thumbnail) {
-          embed.setThumbnail(playlist.thumbnail);
+          ephemeralEmbed.setThumbnail(playlist.thumbnail);
         }
 
-        await sendEmbedObject(context, embed);
+        if (context.isSlash) {
+          await context.interaction!.followUp({ embeds: [ephemeralEmbed], flags: 64 });
+        } else {
+          await context.message!.reply({ embeds: [ephemeralEmbed] });
+        }
+        
+        await createInitialMusicEmbed(context, player, client);
         
         if (!player.playing && !player.paused) {
           await player.play();
         }
       } else {
         const track = res.tracks[0];
-        const queuePosition = player.queue.tracks.length + 1;
-        
         player.queue.add(track);
 
-        const embed = new EmbedBuilder()
-          .setTitle('🎵 Música Adicionada à Fila')
+        const ephemeralEmbed = new EmbedBuilder()
+          .setTitle('🎵 Música Adicionada')
           .setColor('#00FF88')
           .setDescription(`**[${track.info.title}](${track.info.uri})**`)
           .addFields(
-            { name: '👤 Solicitado por', value: `<@${member.id}>`, inline: true },
-            { name: '👨‍🎤 Artista', value: track.info.author || 'Desconhecido', inline: true },
-            { name: '⏱️ Duração', value: formatTime(track.info.duration || 0), inline: true },
-            { name: '📍 Posição na fila', value: player.queue.tracks.length === 1 ? '🔄 Tocando agora' : `#${queuePosition}`, inline: true },
-            { name: '🎧 Canal de voz', value: voiceChannel.name, inline: true },
-            { name: '📊 Fila atual', value: `${player.queue.tracks.length} música(s)`, inline: true }
+            { name: '👤 Adicionado por', value: `<@${member.id}>`, inline: true },
+            { name: '📍 Posição na fila', value: `#${player.queue.tracks.length}`, inline: true },
+            { name: '⏱️ Duração', value: formatTime(track.info.duration || 0), inline: true }
           )
           .setThumbnail(track.info.artworkUrl || `https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`)
-          .setFooter({ 
-            text: player.queue.tracks.length === 1 ? 'Reproduzindo agora' : `${player.queue.tracks.length - 1} música(s) na fila`
-          })
           .setTimestamp();
 
-        if (player.queue.tracks.length > 1) {
-          const nextTracks = player.queue.tracks.slice(0, 3);
-          const nextTracksText = nextTracks.map((t: any, index: number) => 
-            `**${index + 2}.** [${t.info.title}](${t.info.uri}) - \`${formatTime(t.info.duration || 0)}\``
-          ).join('\n');
-          
-          if (nextTracksText) {
-            embed.addFields({
-              name: '🔜 Próximas na fila',
-              value: nextTracksText + (player.queue.tracks.length > 4 ? `\n*... e mais ${player.queue.tracks.length - 4} música(s)*` : ''),
-              inline: false
-            });
-          }
+        if (context.isSlash) {
+          await context.interaction!.followUp({ embeds: [ephemeralEmbed], flags: 64 });
+        } else {
+          await context.message!.reply({ embeds: [ephemeralEmbed] });
         }
         
-        const row = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId('music_resume')
-              .setLabel('Retomar')
-              .setStyle(ButtonStyle.Success)
-              .setEmoji('▶️'),
-            new ButtonBuilder()
-              .setCustomId('music_pause')
-              .setLabel('Pausar')
-              .setStyle(ButtonStyle.Primary)
-              .setEmoji('⏸️'),
-            new ButtonBuilder()
-              .setCustomId('music_stop')
-              .setLabel('Parar')
-              .setStyle(ButtonStyle.Danger)
-              .setEmoji('⏹️'),
-            new ButtonBuilder()
-              .setCustomId('music_queue')
-              .setLabel('Ver Fila')
-              .setStyle(ButtonStyle.Secondary)
-              .setEmoji('📋')
-          );
-
-        await sendEmbedObject(context, embed, row);
+        await createInitialMusicEmbed(context, player, client);
         
         if (!player.playing) {
           await player.play();
@@ -181,64 +259,25 @@ const command: Command = {
       }
     } catch (error) {
       logger.error(`Erro ao executar comando play: ${error instanceof Error ? error.stack || error.message : String(error)}`);
-      await sendErrorEmbed(context, '❌ Erro', 'Ocorreu um erro ao tentar reproduzir esta música!');
+      
+      const errorEmbed = new EmbedBuilder()
+        .setTitle('❌ Erro')
+        .setDescription('Ocorreu um erro ao tentar reproduzir esta música!')
+        .setColor('#FF0000')
+        .setTimestamp();
+
+      if (context.isSlash) {
+        if (context.interaction!.deferred) {
+          await context.interaction!.editReply({ embeds: [errorEmbed] });
+        } else if (!context.interaction!.replied) {
+          await context.interaction!.reply({ embeds: [errorEmbed] });
+        }
+      } else {
+        await context.message!.reply({ embeds: [errorEmbed] });
+      }
     }
   }
 };
-
-async function sendEmbed(context: CommandContext, title: string, description: string) {
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor('#00BFFF')
-    .setTimestamp();
-  
-  if (context.isSlash) {
-    if (context.interaction!.deferred || context.interaction!.replied) {
-      await context.interaction!.editReply({ embeds: [embed] });
-    } else {
-      await context.interaction!.reply({ embeds: [embed] });
-    }
-  } else {
-    await context.message!.reply({ embeds: [embed] });
-  }
-}
-
-async function sendErrorEmbed(context: CommandContext, title: string, description: string) {
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor('#FF0000')
-    .setTimestamp();
-  
-  if (context.isSlash) {
-    if (context.interaction!.deferred || context.interaction!.replied) {
-      await context.interaction!.editReply({ embeds: [embed] });
-    } else {
-      await context.interaction!.reply({ embeds: [embed] });
-    }
-  } else {
-    await context.message!.reply({ embeds: [embed] });
-  }
-}
-
-async function sendEmbedObject(context: CommandContext, embed: EmbedBuilder, row?: ActionRowBuilder<ButtonBuilder>) {
-  const payload = row ? { embeds: [embed], components: [row] } : { embeds: [embed] };
-  
-  if (context.isSlash) {
-    if (context.interaction!.deferred || context.interaction!.replied) {
-      await context.interaction!.editReply(payload);
-    } else {
-      await context.interaction!.reply(payload);
-    }
-  } else {
-    await context.message!.reply(payload);
-  }
-}
-
-function getMemberName(member: GuildMember): string {
-  return member.nickname || member.user.username;
-}
 
 function formatTime(ms: number): string {
   const seconds = Math.floor((ms / 1000) % 60);
@@ -249,6 +288,117 @@ function formatTime(ms: number): string {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   } else {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+}
+
+function formatYouTubeDuration(duration: string): string {
+  if (!duration) return '';
+  
+  const parts = duration.split(':');
+  if (parts.length === 2) {
+    return duration;
+  } else if (parts.length === 3) {
+    return duration;
+  }
+  
+  return duration;
+}
+
+async function cleanupOldMusicMessages(channelId: string, client: MiClient) {
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !('messages' in channel)) return;
+
+    const messages = await channel.messages.fetch({ limit: 20 });
+    const botMessages = messages.filter(msg => 
+      msg.author.id === client.user!.id && 
+      msg.embeds.length > 0 &&
+      (msg.embeds[0].title?.includes('🎵') || msg.embeds[0].title?.includes('📭'))
+    );
+
+    for (const message of botMessages.values()) {
+      try {
+        await message.delete();
+      } catch (error) {
+      }
+    }
+  } catch (error) {
+    // Ignorar erros de cleanup
+  }
+}
+
+async function createInitialMusicEmbed(context: CommandContext, player: any, client: MiClient) {
+  const currentTrack = player.queue.current || player.queue.tracks[0];
+  
+  const embed = new EmbedBuilder()
+    .setTitle('🎵 Player de Música')
+    .setColor('#00FF88')
+    .addFields(
+      { name: '📊 Fila', value: `${player.queue.tracks.length} música(s)`, inline: true },
+      { name: '🎧 Canal', value: `<#${player.voiceChannelId}>`, inline: true },
+      { name: '🔊 Volume', value: `${player.volume}%`, inline: true }
+    )
+    .setTimestamp();
+
+  if (currentTrack) {
+    embed.setDescription(`**[${currentTrack.info.title}](${currentTrack.info.uri})**`);
+    embed.setThumbnail(currentTrack.info.artworkUrl || `https://img.youtube.com/vi/${currentTrack.info.identifier}/maxresdefault.jpg`);
+  } else {
+    embed.setDescription('Preparando reprodução...');
+  }
+
+  const row = new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('music_resume')
+        .setLabel('Retomar')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('▶️'),
+      new ButtonBuilder()
+        .setCustomId('music_pause')
+        .setLabel('Pausar')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⏸️'),
+      new ButtonBuilder()
+        .setCustomId('music_stop')
+        .setLabel('Parar')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('⏹️'),
+      new ButtonBuilder()
+        .setCustomId('music_queue')
+        .setLabel('Ver Fila')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📋')
+    );
+
+  let message;
+  if (context.isSlash) {
+    message = await context.interaction!.editReply({ embeds: [embed], components: [row] });
+  } else {
+    message = await context.message!.reply({ embeds: [embed], components: [row] });
+  }
+
+  nowPlayingMessages.set(player.guildId, message.id);
+}
+
+/**
+ * Envia um embed simples de status para o usuário.
+ */
+async function sendEmbed(context: CommandContext, title: string, description: string) {
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor('#9F59FF')
+    .setTimestamp();
+
+  if (context.isSlash) {
+    if (context.interaction!.deferred) {
+      await context.interaction!.editReply({ embeds: [embed] });
+    } else if (!context.interaction!.replied) {
+      await context.interaction!.reply({ embeds: [embed], flags: 64 });
+    }
+  } else {
+    await context.message!.reply({ embeds: [embed] });
   }
 }
 
