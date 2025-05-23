@@ -14,22 +14,34 @@ const event: Event<'ready'> = {
       return;
     }
     
-    miClient.lavalink.on('trackStuck', async (player, track) => {
+    miClient.lavalink.on('trackStuck', async (player: any, track: any, payload: any) => {
       try {
         if (!track) return;
         
         const channel = await client.channels.fetch(player.textChannelId || '');
         if (!channel || !(channel instanceof TextChannel)) return;
         
+        logger.warn(`Música travada: ${track.info.title} no servidor ${player.guildId}`);
+        
         const embed = new EmbedBuilder()
           .setTitle('⚠️ Música Travada')
           .setColor('#FFA500')
-          .setDescription(`A música **[${track.info.title}](${track.info.uri})** travou e será pulada.`)
+          .setDescription(`A música **[${track.info.title}](${track.info.uri})** travou e será pulada automaticamente.`)
+          .addFields(
+            { name: '🎵 Artista', value: track.info.author || 'Desconhecido', inline: true },
+            { name: '⏱️ Tempo travado', value: `${payload.thresholdMs || 'Desconhecido'}ms`, inline: true },
+            { name: '⏭️ Ação', value: 'Pulando para próxima música...', inline: false }
+          )
           .setTimestamp();
         
         await channel.send({ embeds: [embed] });
         
-        player.skip();
+        if (player.queue.tracks.length > 0) {
+          await player.skip();
+        } else {
+          await player.stopPlaying(true, false);
+        }
+        
       } catch (error) {
         logger.error(`Erro no evento trackStuck: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       }
