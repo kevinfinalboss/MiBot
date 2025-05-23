@@ -31,7 +31,7 @@ export class DNSManager extends CloudflareBaseClient {
     try {
       this.validateZoneId(zoneId);
 
-      const response = await this.cf.dns.records.create({
+      const baseData = {
         zone_id: zoneId,
         type: data.type as any,
         name: data.name,
@@ -40,8 +40,24 @@ export class DNSManager extends CloudflareBaseClient {
         proxied: data.proxied,
         comment: data.comment,
         tags: data.tags
-      });
-      return response as unknown as DNSRecord;
+      };
+
+      if (data.type === 'SRV' && (data as any).priority !== undefined) {
+        const srvData = data as any;
+        const response = await this.cf.dns.records.create({
+          ...baseData,
+          data: {
+            priority: srvData.priority,
+            weight: srvData.weight,
+            port: srvData.port,
+            target: srvData.target
+          }
+        });
+        return response as unknown as DNSRecord;
+      } else {
+        const response = await this.cf.dns.records.create(baseData);
+        return response as unknown as DNSRecord;
+      }
     } catch (error) {
       this.handleError(`createDNSRecord(${zoneId})`, error);
     }
