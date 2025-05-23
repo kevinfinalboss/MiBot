@@ -55,7 +55,8 @@ export class NestManager extends PterodactylBaseClient {
           const eggsResponse = await this.getEggs(nest.attributes.id);
           const foundEgg = eggsResponse.data.find(egg => egg.attributes.id === eggId);
           if (foundEgg) {
-            return foundEgg;
+            const fullEgg = await this.getEgg(nest.attributes.id, eggId);
+            return fullEgg;
           }
         } catch (error) {
           continue;
@@ -141,19 +142,28 @@ export class NestManager extends PterodactylBaseClient {
   async findBestNode(): Promise<PterodactylNode | null> {
     try {
       const nodesResponse = await this.getNodes();
+      
+      if (!nodesResponse || !nodesResponse.data || nodesResponse.data.length === 0) {
+        return null;
+      }
+      
       const availableNodes = nodesResponse.data.filter(node => 
-        !node.attributes.maintenance_mode
+        node && node.attributes && !node.attributes.maintenance_mode
       );
 
       if (availableNodes.length === 0) return null;
 
-      availableNodes.sort((a, b) => {
-        const aUsage = (a.attributes.allocated_resources.memory / a.attributes.memory) + 
-                      (a.attributes.allocated_resources.disk / a.attributes.disk);
-        const bUsage = (b.attributes.allocated_resources.memory / b.attributes.memory) + 
-                      (b.attributes.allocated_resources.disk / b.attributes.disk);
-        return aUsage - bUsage;
-      });
+      try {
+        availableNodes.sort((a, b) => {
+          const aUsage = (a.attributes.allocated_resources.memory / a.attributes.memory) + 
+                        (a.attributes.allocated_resources.disk / a.attributes.disk);
+          const bUsage = (b.attributes.allocated_resources.memory / b.attributes.memory) + 
+                        (b.attributes.allocated_resources.disk / b.attributes.disk);
+          return aUsage - bUsage;
+        });
+      } catch (sortError) {
+        console.warn('Erro ao ordenar nodes, usando primeiro disponível');
+      }
 
       return availableNodes[0];
     } catch (error) {
