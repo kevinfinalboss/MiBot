@@ -523,6 +523,7 @@ async function handleEmailAutocomplete(client: MiClient, interaction: Autocomple
 async function handleVersionAutocomplete(interaction: AutocompleteInteraction, query: string) {
   const versions = [
     'latest',
+    '1.21.5',
     '1.21.4',
     '1.21.3', 
     '1.21.1',
