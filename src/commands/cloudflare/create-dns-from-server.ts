@@ -26,18 +26,13 @@ const command: Command = {
         .setRequired(true)
     )
     .addStringOption(option =>
-      option.setName('tipo')
-        .setDescription('Tipo de registro DNS')
-        .setRequired(false)
+      option.setName('tipo-servidor')
+        .setDescription('Tipo de servidor/jogo')
+        .setRequired(true)
         .addChoices(
-          { name: 'A (IP v4)', value: 'A' },
-          { name: 'SRV (Service Record)', value: 'SRV' }
+          { name: 'Minecraft', value: 'minecraft' },
+          { name: 'Terraria', value: 'terraria' }
         )
-    )
-    .addBooleanOption(option =>
-      option.setName('proxy')
-        .setDescription('Ativar proxy do Cloudflare (não recomendado para jogos)')
-        .setRequired(false)
     ) as SlashCommandBuilder,
 
   options: {
@@ -47,10 +42,10 @@ const command: Command = {
     ownerOnly: true,
     guildOnly: true,
     visible: true,
-    usage: 'cf-create-dns-from-server <zona> <servidor-id> <subdominio>',
+    usage: 'cf-create-dns-from-server <zona> <servidor-id> <subdominio> <tipo-servidor>',
     examples: [
-      'cf-create-dns-from-server zona:kevindev.com.br servidor-id:3 subdominio:terraria',
-      'cf-create-dns-from-server zona:nojeira.com.br servidor-id:1 subdominio:minecraft tipo:SRV'
+      'cf-create-dns-from-server zona:kevindev.com.br servidor-id:3 subdominio:terraria tipo-servidor:terraria',
+      'cf-create-dns-from-server zona:nojeira.com.br servidor-id:1 subdominio:minecraft tipo-servidor:minecraft'
     ]
   },
 
@@ -96,10 +91,9 @@ const command: Command = {
       const zoneId = context.isSlash ? context.interaction!.options.getString('zona', true) : '';
       const serverId = context.isSlash ? context.interaction!.options.getInteger('servidor-id', true) : 0;
       const subdominio = context.isSlash ? context.interaction!.options.getString('subdominio', true) : '';
-      const tipo = context.isSlash ? context.interaction!.options.getString('tipo') || 'A' : 'A';
-      const proxy = context.isSlash ? context.interaction!.options.getBoolean('proxy') || false : false;
+      const tipoServidor = context.isSlash ? context.interaction!.options.getString('tipo-servidor', true) : 'minecraft';
 
-      logger.info(`[CF-CREATE-DNS] Criando DNS - zona: ${zoneId}, servidor: ${serverId}, subdominio: ${subdominio}`);
+      logger.info(`[CF-CREATE-DNS] Criando DNS - zona: ${zoneId}, servidor: ${serverId}, subdominio: ${subdominio}, tipo: ${tipoServidor}`);
 
       const zone = await client.cloudflare.zones.getZone(zoneId);
       if (!zone) {
@@ -137,6 +131,8 @@ const command: Command = {
         return;
       }
 
+      const { recordType, needsSrvRecord } = getRecordTypeForGame(tipoServidor);
+
       const loadingEmbed = new EmbedBuilder()
         .setTitle('⏳ Criando Registro DNS...')
         .setDescription(`Configurando DNS para **${server.attributes.name}**`)
@@ -145,9 +141,8 @@ const command: Command = {
           { name: '🌐 Domínio', value: fullDomain, inline: true },
           { name: '📍 IP', value: ip, inline: true },
           { name: '🔌 Porta', value: port.toString(), inline: true },
-          { name: '📋 Tipo', value: tipo, inline: true },
-          { name: '🟠 Proxy', value: proxy ? 'Ativo' : 'Inativo', inline: true },
-          { name: '🎮 Servidor', value: `${server.attributes.name} (ID: ${serverId})`, inline: true }
+          { name: '🎮 Tipo de Servidor', value: tipoServidor.charAt(0).toUpperCase() + tipoServidor.slice(1), inline: true },
+          { name: '📋 Tipo DNS', value: recordType, inline: true }
         )
         .setTimestamp();
 
@@ -157,17 +152,12 @@ const command: Command = {
 
       let recordData: any;
       let recordName: string;
+      let createdRecords: any[] = [];
 
-      if (tipo === 'SRV') {
-        const servicePrefix = detectServiceFromServer(server);
+      if (needsSrvRecord) {
+        const servicePrefix = getServicePrefix(tipoServidor);
         recordName = `${servicePrefix}.${subdominio}.${zone.name}`;
-        recordData = {
-          type: 'SRV',
-          name: recordName,
-          content: `0 5 ${port} ${fullDomain}`,
-          ttl: 300
-        };
-
+        
         const aRecordData = {
           type: 'A',
           name: fullDomain,
@@ -176,38 +166,45 @@ const command: Command = {
           proxied: false
         };
 
-        await client.cloudflare.dns.createDNSRecord(zoneId, aRecordData);
+        const srvRecordData = {
+          type: 'SRV',
+          name: recordName,
+          content: `0 5 ${port} ${fullDomain}`,
+          ttl: 300
+        };
+
+        const aRecord = await client.cloudflare.dns.createDNSRecord(zoneId, aRecordData);
+        const srvRecord = await client.cloudflare.dns.createDNSRecord(zoneId, srvRecordData);
+        
+        createdRecords = [aRecord, srvRecord];
       } else {
         recordName = fullDomain;
         recordData = {
-          type: tipo,
+          type: recordType,
           name: recordName,
           content: ip,
           ttl: 300,
-          proxied: proxy && tipo === 'A'
+          proxied: false
         };
+
+        const record = await client.cloudflare.dns.createDNSRecord(zoneId, recordData);
+        createdRecords = [record];
       }
 
-      const createdRecord = await client.cloudflare.dns.createDNSRecord(zoneId, recordData);
-
-      const connectionInstructions = generateConnectionInstructions(server, fullDomain, port, tipo);
+      const connectionInstructions = generateConnectionInstructions(tipoServidor, fullDomain, port, needsSrvRecord);
 
       const successEmbed = new EmbedBuilder()
         .setTitle('✅ DNS Criado com Sucesso!')
         .setDescription(`Registro DNS criado para **${server.attributes.name}**`)
         .setColor('#00FF88')
         .addFields(
-          { name: '🌐 Domínio', value: `\`${recordName}\``, inline: true },
+          { name: '🌐 Domínio', value: `\`${fullDomain}\``, inline: true },
           { name: '📍 IP de Destino', value: `\`${ip}\``, inline: true },
           { name: '🔌 Porta', value: `\`${port}\``, inline: true },
-          { name: '📋 Tipo de Registro', value: `\`${createdRecord.type}\``, inline: true },
-          { name: '🆔 ID do Registro', value: `\`${createdRecord.id}\``, inline: true },
-          { name: '⏰ TTL', value: `\`${createdRecord.ttl}s\``, inline: true }
+          { name: '🎮 Tipo de Servidor', value: `\`${tipoServidor.charAt(0).toUpperCase() + tipoServidor.slice(1)}\``, inline: true },
+          { name: '📋 Registros Criados', value: `\`${createdRecords.map(r => r.type).join(', ')}\``, inline: true },
+          { name: '⏰ TTL', value: `\`${createdRecords[0].ttl}s\``, inline: true }
         );
-
-      if (createdRecord.proxied) {
-        successEmbed.addFields({ name: '🟠 Proxy', value: '**Ativo** (pode afetar jogos)', inline: true });
-      }
 
       if (connectionInstructions) {
         successEmbed.addFields({ 
@@ -233,7 +230,7 @@ const command: Command = {
         await context.interaction!.editReply({ embeds: [successEmbed] });
       }
 
-      logger.info(`[CF-CREATE-DNS] DNS criado com sucesso - ${recordName} -> ${ip}:${port}`);
+      logger.info(`[CF-CREATE-DNS] DNS criado com sucesso - ${recordName} -> ${ip}:${port} (${tipoServidor})`);
 
     } catch (error) {
       logger.error(`Erro no comando cf-create-dns-from-server: ${error instanceof Error ? error.stack || error.message : String(error)}`);
@@ -356,39 +353,40 @@ function isValidSubdomain(subdomain: string): boolean {
   return subdomainRegex.test(subdomain) && subdomain.length <= 63;
 }
 
-function detectServiceFromServer(server: any): string {
-  const serverName = server.attributes.name.toLowerCase();
-  
-  if (serverName.includes('minecraft') || serverName.includes('mc')) {
-    return '_minecraft._tcp';
-  } else if (serverName.includes('terraria')) {
-    return '_terraria._tcp';
-  } else if (serverName.includes('teamspeak') || serverName.includes('ts3')) {
-    return '_ts3._udp';
-  } else if (serverName.includes('discord')) {
-    return '_discord._tcp';
-  } else {
-    return '_game._tcp';
+function getRecordTypeForGame(tipoServidor: string): { recordType: string; needsSrvRecord: boolean } {
+  switch (tipoServidor) {
+    case 'minecraft':
+      return { recordType: 'SRV', needsSrvRecord: true };
+    case 'terraria':
+      return { recordType: 'A', needsSrvRecord: false };
+    default:
+      return { recordType: 'A', needsSrvRecord: false };
   }
 }
 
-function generateConnectionInstructions(server: any, domain: string, port: number, tipo: string): string {
-  const serverName = server.attributes.name.toLowerCase();
-  
-  if (serverName.includes('minecraft') || serverName.includes('mc')) {
-    if (tipo === 'SRV') {
-      return `**Minecraft (SRV):**\n\`${domain}\` (porta detectada automaticamente)`;
-    } else {
-      return `**Minecraft:**\n\`${domain}:${port}\``;
-    }
-  } else if (serverName.includes('terraria')) {
-    return `**Terraria:**\n\`${domain}:${port}\``;
-  } else if (serverName.includes('teamspeak') || serverName.includes('ts3')) {
-    return `**TeamSpeak:**\n\`${domain}:${port}\``;
-  } else if (serverName.includes('discord')) {
-    return `**Discord Bot:**\n\`${domain}:${port}\``;
-  } else {
-    return `**Conexão Genérica:**\n\`${domain}:${port}\``;
+function getServicePrefix(tipoServidor: string): string {
+  switch (tipoServidor) {
+    case 'minecraft':
+      return '_minecraft._tcp';
+    case 'terraria':
+      return '_terraria._tcp';
+    default:
+      return '_game._tcp';
+  }
+}
+
+function generateConnectionInstructions(tipoServidor: string, domain: string, port: number, needsSrvRecord: boolean): string {
+  switch (tipoServidor) {
+    case 'minecraft':
+      if (needsSrvRecord) {
+        return `**Minecraft (SRV):**\n\`${domain}\` (porta detectada automaticamente)`;
+      } else {
+        return `**Minecraft:**\n\`${domain}:${port}\``;
+      }
+    case 'terraria':
+      return `**Terraria:**\n\`${domain}:${port}\``;
+    default:
+      return `**Conexão Genérica:**\n\`${domain}:${port}\``;
   }
 }
 
