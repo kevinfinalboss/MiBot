@@ -106,8 +106,6 @@ export class MiClient extends Client {
     }
 
     this.once('ready', async () => {
-      await this.database.connect();
-
       await this.lavalink.init({
         id: this.user!.id,
         username: this.user!.tag
@@ -165,8 +163,17 @@ export class MiClient extends Client {
   }
 
   public async start(): Promise<void> {
-    logger.info('Iniciando login no Discord...');
-    await this.login(this.config.bot.token);
-    logger.success('Logado como ' + this.user?.tag);
+    try {
+      logger.info('[MongoDB] Conectando ao banco de dados primeiro...');
+      await this.database.connect();
+      logger.success('[MongoDB] Conexão estabelecida antes do login Discord');
+      
+      logger.info('Iniciando login no Discord...');
+      await this.login(this.config.bot.token);
+      logger.success('Logado como ' + this.user?.tag);
+    } catch (error) {
+      logger.error('Erro durante inicialização: ' + (error instanceof Error ? error.message : String(error)));
+      throw error;
+    }
   }
 }
