@@ -1,7 +1,6 @@
 export interface KubernetesConfig {
   inCluster: boolean;
   namespace?: string;
-  kubeConfigPath?: string;
 }
 
 export interface PodInfo {
