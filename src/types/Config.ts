@@ -6,6 +6,12 @@ export interface LavalinkNodeConfig {
   secure: boolean;
 }
 
+export interface KubernetesConfig {
+  inCluster: boolean;
+  namespace?: string;
+  kubeConfigPath?: string;
+}
+
 export interface BotConfig {
   bot: {
     token: string;
@@ -26,4 +32,5 @@ export interface BotConfig {
     url: string;
     apiKey: string;
   };
+  kubernetes?: KubernetesConfig;
 }
