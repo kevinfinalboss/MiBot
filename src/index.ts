@@ -29,11 +29,10 @@ async function main() {
       const client = new MiClient(config);
       
       await loadEvents(client);
-      
-      await client.start();
-      
       await loadCommands(client);
       await loadComponents(client);
+      
+      await client.start();
       
       logger.info('[MiBot] Bot iniciado e pronto para uso!');
     }
@@ -44,6 +43,6 @@ async function main() {
 }
 
 main().catch(error => {
-  logger.error(`[MiBot] Erro fatal: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+  logger.error('[MiBot] Erro fatal: ' + (error instanceof Error ? error.stack || error.message : String(error)));
   process.exit(1);
 });
