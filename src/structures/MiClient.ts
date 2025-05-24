@@ -9,6 +9,7 @@ import { BotConfig } from '../types/Config';
 import { LavalinkManager } from 'lavalink-client';
 import { PterodactylClient } from '../clients/pterodactyl/PterodactylClient';
 import { CloudflareClient } from '../clients/cloudflare/CloudflareClient';
+import { KubernetesClient } from '../clients/kubernetes/KubernetesClient';
 import { logger } from '../utils/logger';
 
 export class MiClient extends Client {
@@ -21,6 +22,7 @@ export class MiClient extends Client {
   public lavalink: LavalinkManager;
   public pterodactyl?: PterodactylClient;
   public cloudflare?: CloudflareClient;
+  public kubernetes?: KubernetesClient;
 
   constructor(config: BotConfig) {
     super({
@@ -86,6 +88,12 @@ export class MiClient extends Client {
       logger.warn('[Cloudflare] Configuração não encontrada - recursos do Cloudflare desabilitados');
     }
 
+    if (config.kubernetes) {
+      this.kubernetes = new KubernetesClient(config.kubernetes);
+    } else {
+      logger.warn('[Kubernetes] Configuração não encontrada - recursos do Kubernetes desabilitados');
+    }
+
     this.once('ready', async () => {
       await this.lavalink.init({
         id: this.user!.id,
@@ -99,6 +107,10 @@ export class MiClient extends Client {
 
       if (this.cloudflare) {
         await this.cloudflare.initialize();
+      }
+
+      if (this.kubernetes) {
+        await this.kubernetes.initialize();
       }
     });
 
