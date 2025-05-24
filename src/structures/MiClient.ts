@@ -10,6 +10,7 @@ import { LavalinkManager } from 'lavalink-client';
 import { PterodactylClient } from '../clients/pterodactyl/PterodactylClient';
 import { CloudflareClient } from '../clients/cloudflare/CloudflareClient';
 import { KubernetesClient } from '../clients/kubernetes/KubernetesClient';
+import { DatabaseClient } from '../databases/MongoClient';
 import { logger } from '../utils/logger';
 
 export class MiClient extends Client {
@@ -23,6 +24,7 @@ export class MiClient extends Client {
   public pterodactyl?: PterodactylClient;
   public cloudflare?: CloudflareClient;
   public kubernetes?: KubernetesClient;
+  public database: DatabaseClient;
 
   constructor(config: BotConfig) {
     super({
@@ -42,6 +44,8 @@ export class MiClient extends Client {
     });
 
     this.config = config;
+
+    this.database = DatabaseClient.getInstance();
 
     if (!config.lavalink.nodes || !Array.isArray(config.lavalink.nodes) || config.lavalink.nodes.length === 0) {
       throw new Error('É necessário configurar pelo menos um node Lavalink válido');
@@ -89,12 +93,21 @@ export class MiClient extends Client {
     }
 
     if (config.kubernetes) {
-      this.kubernetes = new KubernetesClient(config.kubernetes);
+      try {
+        this.kubernetes = new KubernetesClient(config.kubernetes);
+        logger.info('[Kubernetes] Cliente criado com sucesso');
+      } catch (error) {
+        logger.error('[Kubernetes] Erro ao criar cliente: ' + (error instanceof Error ? error.message : String(error)));
+        logger.warn('[Kubernetes] Recursos do Kubernetes desabilitados devido ao erro');
+        this.kubernetes = undefined;
+      }
     } else {
       logger.warn('[Kubernetes] Configuração não encontrada - recursos do Kubernetes desabilitados');
     }
 
     this.once('ready', async () => {
+      await this.database.connect();
+
       await this.lavalink.init({
         id: this.user!.id,
         username: this.user!.tag
@@ -102,15 +115,33 @@ export class MiClient extends Client {
       logger.success('Lavalink conectado como ' + this.user!.tag);
 
       if (this.pterodactyl) {
-        await this.pterodactyl.initialize();
+        try {
+          await this.pterodactyl.initialize();
+        } catch (error) {
+          logger.error('[Pterodactyl] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
+          logger.warn('[Pterodactyl] Continuando sem recursos do Pterodactyl...');
+          this.pterodactyl = undefined;
+        }
       }
 
       if (this.cloudflare) {
-        await this.cloudflare.initialize();
+        try {
+          await this.cloudflare.initialize();
+        } catch (error) {
+          logger.error('[Cloudflare] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
+          logger.warn('[Cloudflare] Continuando sem recursos do Cloudflare...');
+          this.cloudflare = undefined;
+        }
       }
 
       if (this.kubernetes) {
-        await this.kubernetes.initialize();
+        try {
+          await this.kubernetes.initialize();
+        } catch (error) {
+          logger.error('[Kubernetes] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
+          logger.warn('[Kubernetes] Continuando sem recursos do Kubernetes...');
+          this.kubernetes = undefined;
+        }
       }
     });
 
@@ -118,6 +149,18 @@ export class MiClient extends Client {
       if(d.t === 'VOICE_SERVER_UPDATE' || d.t === 'VOICE_STATE_UPDATE') {
         this.lavalink.sendRawData(d);
       }
+    });
+
+    process.on('SIGINT', async () => {
+      logger.info('[MiBot] Recebido SIGINT, desconectando do banco...');
+      await this.database.disconnect();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      logger.info('[MiBot] Recebido SIGTERM, desconectando do banco...');
+      await this.database.disconnect();
+      process.exit(0);
     });
   }
 
