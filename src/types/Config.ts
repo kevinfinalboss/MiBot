@@ -11,6 +11,14 @@ export interface KubernetesConfig {
   namespace?: string;
 }
 
+export interface DatabaseConfig {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  database: string;
+}
+
 export interface BotConfig {
   bot: {
     token: string;
@@ -32,4 +40,5 @@ export interface BotConfig {
     apiKey: string;
   };
   kubernetes?: KubernetesConfig;
+  database: DatabaseConfig;
 }
