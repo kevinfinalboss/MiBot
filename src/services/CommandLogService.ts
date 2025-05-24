@@ -3,13 +3,16 @@ import { CommandLog } from '../databases/schemas/CommandLogSchema';
 import { CommandContext } from '../types/commands/CommandContext';
 import { Command } from '../types/commands/Command';
 import { MiClient } from '../structures/MiClient';
+import { GuildService } from './GuildService';
 
 export class CommandLogService {
   private static instance: CommandLogService;
   private repository: CommandLogRepository;
+  private guildService: GuildService;
 
   private constructor() {
     this.repository = CommandLogRepository.getInstance();
+    this.guildService = GuildService.getInstance();
   }
 
   public static getInstance(): CommandLogService {
@@ -33,9 +36,10 @@ export class CommandLogService {
 
       const guild = context.interaction?.guild || context.message?.guild;
       const channel = context.interaction?.channel || context.message?.channel;
+      const commandName = context.interaction?.commandName || command.data?.name || 'unknown';
 
       const commandLog: Omit<CommandLog, '_id'> = {
-        commandName: context.interaction?.commandName || command.data?.name || 'unknown',
+        commandName,
         commandType: command.options.type,
         userId: user.id,
         username: user.username,
@@ -64,6 +68,10 @@ export class CommandLogService {
       };
 
       await this.repository.logCommand(commandLog);
+      
+      if (guild?.id && success) {
+        await this.guildService.incrementCommandUsage(guild.id, commandName);
+      }
     } catch (logError) {
       console.error('Erro ao registrar log do comando:', logError);
     }
