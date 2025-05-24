@@ -10,6 +10,16 @@ export interface PodInfo {
   restarts: number;
   age: string;
   ip?: string;
+  resources?: {
+    requests?: {
+      cpu?: string;
+      memory?: string;
+    };
+    limits?: {
+      cpu?: string;
+      memory?: string;
+    };
+  };
 }
 
 export interface DeploymentInfo {
@@ -79,6 +89,28 @@ export interface NodeInfo {
   version: string;
   internalIP: string;
   externalIP?: string;
+  osImage?: string;
+  kernelVersion?: string;
+  containerRuntime?: string;
+  architecture?: string;
+  capacity?: {
+    cpu: string;
+    memory: string;
+    pods: string;
+    storage: string;
+  };
+  allocatable?: {
+    cpu: string;
+    memory: string;
+    pods: string;
+    storage: string;
+  };
+  conditions?: Array<{
+    type: string;
+    status: string;
+    reason: string;
+    message: string;
+  }>;
 }
 
 export interface NamespaceInfo {
