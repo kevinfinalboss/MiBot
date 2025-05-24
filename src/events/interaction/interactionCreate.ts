@@ -3,17 +3,20 @@ import { MiClient } from '../../structures/MiClient';
 import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { CommandContext } from '../../types/commands/CommandContext';
+import { CommandLogService } from '../../services/CommandLogService';
 
 const event: Event<'interactionCreate'> = {
   name: 'interactionCreate',
   once: false,
   async execute(interaction: Interaction) {
     const client = interaction.client as MiClient;
+    const commandLogService = CommandLogService.getInstance();
     
     try {
       if (interaction.isChatInputCommand()) {
         const commandName = interaction.commandName;
         const command = client.commands.get(commandName);
+        const startTime = Date.now();
         
         if (!command) {
           logger.warn('Comando não encontrado: ' + commandName);
@@ -81,11 +84,16 @@ const event: Event<'interactionCreate'> = {
           isSlash: true
         };
         
+        let success = false;
+        let error: Error | undefined;
+        
         try {
           await command.execute(client, context);
+          success = true;
           logger.info(`Comando executado: ${commandName} por ${interaction.user.tag} (${interaction.user.id})`);
-        } catch (error) {
-          logger.error(`Erro ao executar comando ${commandName}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        } catch (commandError) {
+          error = commandError instanceof Error ? commandError : new Error(String(commandError));
+          logger.error(`Erro ao executar comando ${commandName}: ${error.stack || error.message}`);
           
           const errorMessage = 'Ocorreu um erro ao executar este comando.';
           
@@ -94,6 +102,9 @@ const event: Event<'interactionCreate'> = {
           } else {
             await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
           }
+        } finally {
+          const executionTime = Date.now() - startTime;
+          await commandLogService.logCommandExecution(client, command, context, success, executionTime, error);
         }
       }
       
