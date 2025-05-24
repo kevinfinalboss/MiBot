@@ -3,6 +3,7 @@ import { MiClient } from '../../structures/MiClient';
 import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { CommandContext } from '../../types/commands/CommandContext';
+import { CommandLogService } from '../../services/CommandLogService';
 
 const event: Event<'messageCreate'> = {
   name: 'messageCreate',
@@ -10,6 +11,7 @@ const event: Event<'messageCreate'> = {
   async execute(message: Message) {
     try {
       const client = message.client as MiClient;
+      const commandLogService = CommandLogService.getInstance();
       
       if (message.author.bot) return;
       
@@ -26,6 +28,8 @@ const event: Event<'messageCreate'> = {
                       client.commands.get(client.aliases.get(commandName) || '');
       
       if (!command) return;
+      
+      const startTime = Date.now();
       
       const { options } = command;
       if (options.type === 'SLASH') {
@@ -81,12 +85,20 @@ const event: Event<'messageCreate'> = {
         isSlash: false
       };
       
+      let success = false;
+      let error: Error | undefined;
+      
       try {
         await command.execute(client, context);
+        success = true;
         logger.info(`Comando executado: ${commandName} por ${message.author.tag} (${message.author.id})`);
-      } catch (error) {
-        logger.error(`Erro ao executar comando ${commandName}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      } catch (commandError) {
+        error = commandError instanceof Error ? commandError : new Error(String(commandError));
+        logger.error(`Erro ao executar comando ${commandName}: ${error.stack || error.message}`);
         message.reply('Ocorreu um erro ao executar este comando.').catch(() => {});
+      } finally {
+        const executionTime = Date.now() - startTime;
+        await commandLogService.logCommandExecution(client, command, context, success, executionTime, error);
       }
     } catch (error) {
       logger.error(`Erro não tratado em messageCreate: ${error instanceof Error ? error.stack || error.message : String(error)}`);
