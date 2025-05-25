@@ -21,13 +21,8 @@ export async function loadComponents(client: MiClient): Promise<void> {
   logger.info('[Componentes] Iniciando carregamento de componentes...');
   
   await loadComponentType(client, 'buttons', client.buttons);
-  
   await loadComponentType(client, 'modals', client.modals);
-  
-  const selectMenusDir = path.join(__dirname, '..', 'components', 'selectMenus');
-  if (fs.existsSync(selectMenusDir)) {
-    await loadComponentType(client, 'selectMenus', client.selectMenus);
-  }
+  await loadComponentType(client, 'menus', client.selectMenus);
   
   logger.info(`[Componentes] Carregamento concluído: ${client.buttons.size} botões, ${client.modals.size} modais, ${client.selectMenus?.size || 0} menus de seleção`);
 }
