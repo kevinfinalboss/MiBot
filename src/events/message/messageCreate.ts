@@ -4,6 +4,8 @@ import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { CommandContext } from '../../types/commands/CommandContext';
 import { CommandLogService } from '../../services/CommandLogService';
+import { AuditService } from '../../services/AuditService';
+import { ChannelRestrictionsService } from '../../services/ChannelRestrictionsService';
 
 const event: Event<'messageCreate'> = {
   name: 'messageCreate',
@@ -12,6 +14,8 @@ const event: Event<'messageCreate'> = {
     try {
       const client = message.client as MiClient;
       const commandLogService = CommandLogService.getInstance();
+      const auditService = AuditService.getInstance();
+      const restrictionsService = ChannelRestrictionsService.getInstance();
       
       if (message.author.bot) return;
       
@@ -85,6 +89,22 @@ const event: Event<'messageCreate'> = {
         isSlash: false
       };
       
+      if (message.guild) {
+        const restrictionCheck = await restrictionsService.checkCommandChannelRestriction(
+          client, 
+          context, 
+          commandName, 
+          options.categoria
+        );
+        
+        if (!restrictionCheck.allowed && restrictionCheck.embed) {
+          await message.reply({
+            embeds: [restrictionCheck.embed]
+          });
+          return;
+        }
+      }
+      
       let success = false;
       let error: Error | undefined;
       
@@ -99,6 +119,21 @@ const event: Event<'messageCreate'> = {
       } finally {
         const executionTime = Date.now() - startTime;
         await commandLogService.logCommandExecution(client, command, context, success, executionTime, error);
+        
+        if (message.guild) {
+          await auditService.logCommandExecution(
+            client,
+            message.guild.id,
+            message.author.id,
+            message.author.username,
+            commandName,
+            'PREFIX',
+            success,
+            executionTime,
+            message.channelId,
+            error?.message
+          );
+        }
       }
     } catch (error) {
       logger.error(`Erro não tratado em messageCreate: ${error instanceof Error ? error.stack || error.message : String(error)}`);
