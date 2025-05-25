@@ -4,6 +4,8 @@ import { Event } from '../../types/events/Event';
 import { logger } from '../../utils/logger';
 import { CommandContext } from '../../types/commands/CommandContext';
 import { CommandLogService } from '../../services/CommandLogService';
+import { AuditService } from '../../services/AuditService';
+import { ChannelRestrictionsService } from '../../services/ChannelRestrictionsService';
 
 const event: Event<'interactionCreate'> = {
   name: 'interactionCreate',
@@ -11,6 +13,8 @@ const event: Event<'interactionCreate'> = {
   async execute(interaction: Interaction) {
     const client = interaction.client as MiClient;
     const commandLogService = CommandLogService.getInstance();
+    const auditService = AuditService.getInstance();
+    const restrictionsService = ChannelRestrictionsService.getInstance();
     
     try {
       if (interaction.isChatInputCommand()) {
@@ -84,6 +88,23 @@ const event: Event<'interactionCreate'> = {
           isSlash: true
         };
         
+        if (interaction.guildId) {
+          const restrictionCheck = await restrictionsService.checkCommandChannelRestriction(
+            client, 
+            context, 
+            commandName, 
+            options.categoria
+          );
+          
+          if (!restrictionCheck.allowed && restrictionCheck.embed) {
+            await interaction.reply({
+              embeds: [restrictionCheck.embed],
+              ephemeral: true
+            });
+            return;
+          }
+        }
+        
         let success = false;
         let error: Error | undefined;
         
@@ -105,6 +126,21 @@ const event: Event<'interactionCreate'> = {
         } finally {
           const executionTime = Date.now() - startTime;
           await commandLogService.logCommandExecution(client, command, context, success, executionTime, error);
+          
+          if (interaction.guildId) {
+            await auditService.logCommandExecution(
+              client,
+              interaction.guildId,
+              interaction.user.id,
+              interaction.user.username,
+              commandName,
+              'SLASH',
+              success,
+              executionTime,
+              interaction.channelId,
+              error?.message
+            );
+          }
         }
       }
       
@@ -112,16 +148,63 @@ const event: Event<'interactionCreate'> = {
         const buttonId = interaction.customId;
         const button = client.buttons?.get(buttonId);
         
+        if (interaction.guildId) {
+          const restrictionCheck = await restrictionsService.checkButtonMusicRestriction(
+            client,
+            interaction.guildId,
+            interaction.channelId,
+            interaction.user.username,
+            buttonId
+          );
+          
+          if (!restrictionCheck.allowed && restrictionCheck.embed) {
+            await interaction.reply({
+              embeds: [restrictionCheck.embed],
+              ephemeral: true
+            });
+            
+            await auditService.logButtonInteraction(
+              client,
+              interaction.guildId,
+              interaction.user.id,
+              interaction.user.username,
+              buttonId,
+              interaction.channelId,
+              false,
+              'Canal restrito para botões de música'
+            );
+            return;
+          }
+        }
+        
         if (button) {
+          let success = false;
+          let errorMsg: string | undefined;
+          
           try {
             await button.execute(client, interaction);
+            success = true;
           } catch (error) {
+            errorMsg = error instanceof Error ? error.message : String(error);
             logger.error(`Erro ao executar botão ${buttonId}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
             
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp({ content: 'Ocorreu um erro ao processar este botão.', ephemeral: true }).catch(() => {});
             } else {
               await interaction.reply({ content: 'Ocorreu um erro ao processar este botão.', ephemeral: true }).catch(() => {});
+            }
+          } finally {
+            if (interaction.guildId) {
+              await auditService.logButtonInteraction(
+                client,
+                interaction.guildId,
+                interaction.user.id,
+                interaction.user.username,
+                buttonId,
+                interaction.channelId,
+                success,
+                errorMsg
+              );
             }
           }
         }
@@ -132,15 +215,34 @@ const event: Event<'interactionCreate'> = {
         const menu = client.selectMenus?.get(menuId);
         
         if (menu) {
+          let success = false;
+          let errorMsg: string | undefined;
+          
           try {
             await menu.execute(client, interaction);
+            success = true;
           } catch (error) {
+            errorMsg = error instanceof Error ? error.message : String(error);
             logger.error(`Erro ao executar menu ${menuId}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
             
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp({ content: 'Ocorreu um erro ao processar este menu.', ephemeral: true }).catch(() => {});
             } else {
               await interaction.reply({ content: 'Ocorreu um erro ao processar este menu.', ephemeral: true }).catch(() => {});
+            }
+          } finally {
+            if (interaction.guildId) {
+              await auditService.logMenuInteraction(
+                client,
+                interaction.guildId,
+                interaction.user.id,
+                interaction.user.username,
+                menuId,
+                interaction.values,
+                interaction.channelId,
+                success,
+                errorMsg
+              );
             }
           }
         }
