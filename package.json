@@ -7,7 +7,7 @@
     "start": "node -r ts-node/register src/index.ts",
     "dev": "nodemon --watch src --ext ts --exec \"node --experimental-specifier-resolution=node -r ts-node/register\" src/index.ts",
     "build": "tsc",
-    "prod": "node dist/index.ts"
+    "prod": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
