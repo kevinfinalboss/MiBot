@@ -23,7 +23,7 @@
     "lavalink-client": "^2.5.3",
     "mongodb": "^6.16.0",
     "mysql2": "^3.14.1",
-    "youtube-search-api": "^1.2.2"
+    "youtube-search-api": "^2.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
