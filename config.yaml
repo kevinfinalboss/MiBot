@@ -22,7 +22,7 @@ cloudflare:
 
 pterodactyl:
   url: ${PTERODACTYL_URL}
-  apiKey: ${PTERODACTYL_API_KEY}
+  apiKey: ${PTERODACTYL_APIKEY}
 
 kubernetes:
   inCluster: ${K8S_IN_CLUSTER}
