@@ -10,7 +10,7 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento trackError');
+      logger.error('[Lavalink] ❌ Não inicializado para evento trackError');
       return;
     }
     
@@ -21,7 +21,7 @@ const event: Event<'ready'> = {
         const channel = await client.channels.fetch(player.textChannelId || '');
         if (!channel || !(channel instanceof TextChannel)) return;
         
-        logger.error(`Erro na reprodução: ${track.info.title} - ${payload.exception?.message || 'Erro desconhecido'}`);
+        logger.error(`[Lavalink] ❌ Erro na reprodução: ${track.info.title} - ${payload.exception?.message || 'Erro desconhecido'}`);
         
         const embed = new EmbedBuilder()
           .setTitle('❌ Erro na Reprodução')
@@ -43,11 +43,9 @@ const event: Event<'ready'> = {
         }
         
       } catch (error) {
-        logger.error(`Erro no evento trackError: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ trackError: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento trackError do Lavalink registrado com sucesso');
   }
 };
 
