@@ -21,26 +21,22 @@ export class CloudflareClient {
 
   async initialize(): Promise<void> {
     try {
-      logger.info('[Cloudflare] Inicializando cliente...');
-      
       try {
         const userInfo = await this.getUserInfo();
-        logger.success(`[Cloudflare] Conectado como: ${userInfo.email}`);
       } catch (userError) {
         logger.warn('[Cloudflare] Token não tem permissão para acessar informações do usuário (isso é normal para alguns tipos de token)');
       }
       
       const zones = await this.zones.getZones();
-      logger.success(`[Cloudflare] ${zones.length} zona(s) encontrada(s)`);
       
       if (zones.length > 0) {
         const zoneNames = zones.slice(0, 3).map(z => z.name).join(', ');
         logger.info(`[Cloudflare] Zonas disponíveis: ${zoneNames}${zones.length > 3 ? '...' : ''}`);
       }
       
-      logger.success('[Cloudflare] Cliente inicializado com sucesso!');
+      logger.info(`[Cloudflare] ✅ Cliente inicializado com ${zones.length} zona(s)`);
     } catch (error) {
-      logger.error(`[Cloudflare] Erro na inicialização: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[Cloudflare] ❌ Erro na inicialização: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -55,7 +51,7 @@ export class CloudflareClient {
       
       return await userManager.getUser();
     } catch (error) {
-      logger.error(`[Cloudflare] Erro ao obter informações do usuário: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[Cloudflare] ❌ Erro ao obter informações do usuário: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
