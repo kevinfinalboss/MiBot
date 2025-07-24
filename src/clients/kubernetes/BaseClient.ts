@@ -15,16 +15,13 @@ export class BaseClient {
     const inCluster = this.parseToBoolean(config.inCluster);
     
     if (inCluster) {
-      logger.info('[Kubernetes] Configurando para execução in-cluster');
       this.kc.loadFromCluster();
     } else {
-      logger.info('[Kubernetes] Configurando para execução externa com kubeconfig');
       const kubeConfigPath = path.join(os.homedir(), '.kube', 'config');
       try {
         this.kc.loadFromFile(kubeConfigPath);
-        logger.info(`[Kubernetes] Kubeconfig carregado de: ${kubeConfigPath}`);
       } catch (error) {
-        logger.warn(`[Kubernetes] Falha ao carregar kubeconfig de ${kubeConfigPath}, tentando configuração padrão`);
+        logger.error(`[Kubernetes] ❌ Falha ao carregar kubeconfig de ${kubeConfigPath}: ${error instanceof Error ? error.message : String(error)}`);
         this.kc.loadFromDefault();
       }
     }
@@ -42,7 +39,7 @@ export class BaseClient {
 
   protected handleError(error: any, operation: string): never {
     const errorMessage = error?.response?.body?.message || error?.message || 'Erro desconhecido';
-    logger.error(`[Kubernetes] Erro na operação ${operation}: ${errorMessage}`);
+    logger.error(`[Kubernetes] ❌ Erro na operação ${operation}: ${errorMessage}`);
     throw new Error(`Falha em ${operation}: ${errorMessage}`);
   }
 
@@ -62,10 +59,9 @@ export class BaseClient {
     try {
       const coreV1Api = this.kc.makeApiClient(k8s.CoreV1Api);
       await coreV1Api.listNamespace();
-      logger.success('[Kubernetes] Conexão estabelecida com sucesso');
       return true;
     } catch (error) {
-      logger.error('[Kubernetes] Falha na conexão: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error(`[Kubernetes] ❌ Falha na conexão: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
