@@ -111,10 +111,9 @@ const event: Event<'messageCreate'> = {
       try {
         await command.execute(client, context);
         success = true;
-        logger.info(`Comando executado: ${commandName} por ${message.author.tag} (${message.author.id})`);
       } catch (commandError) {
         error = commandError instanceof Error ? commandError : new Error(String(commandError));
-        logger.error(`Erro ao executar comando ${commandName}: ${error.stack || error.message}`);
+        logger.error(`[Comando] ❌ ${commandName}: ${error.message}`);
         message.reply('Ocorreu um erro ao executar este comando.').catch(() => {});
       } finally {
         const executionTime = Date.now() - startTime;
@@ -136,7 +135,7 @@ const event: Event<'messageCreate'> = {
         }
       }
     } catch (error) {
-      logger.error(`Erro não tratado em messageCreate: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      logger.error(`[Message] ❌ Erro não tratado: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 };
