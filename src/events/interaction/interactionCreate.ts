@@ -23,7 +23,7 @@ const event: Event<'interactionCreate'> = {
         const startTime = Date.now();
         
         if (!command) {
-          logger.warn('Comando não encontrado: ' + commandName);
+          logger.warn(`[Comando] ⚠️ Comando não encontrado: ${commandName}`);
           return;
         }
         
@@ -111,10 +111,9 @@ const event: Event<'interactionCreate'> = {
         try {
           await command.execute(client, context);
           success = true;
-          logger.info(`Comando executado: ${commandName} por ${interaction.user.tag} (${interaction.user.id})`);
         } catch (commandError) {
           error = commandError instanceof Error ? commandError : new Error(String(commandError));
-          logger.error(`Erro ao executar comando ${commandName}: ${error.stack || error.message}`);
+          logger.error(`[Comando] ❌ ${commandName}: ${error.message}`);
           
           const errorMessage = 'Ocorreu um erro ao executar este comando.';
           
@@ -186,7 +185,7 @@ const event: Event<'interactionCreate'> = {
             success = true;
           } catch (error) {
             errorMsg = error instanceof Error ? error.message : String(error);
-            logger.error(`Erro ao executar botão ${buttonId}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+            logger.error(`[Botão] ❌ ${buttonId}: ${errorMsg}`);
             
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp({ content: 'Ocorreu um erro ao processar este botão.', ephemeral: true }).catch(() => {});
@@ -223,7 +222,7 @@ const event: Event<'interactionCreate'> = {
             success = true;
           } catch (error) {
             errorMsg = error instanceof Error ? error.message : String(error);
-            logger.error(`Erro ao executar menu ${menuId}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+            logger.error(`[Menu] ❌ ${menuId}: ${errorMsg}`);
             
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp({ content: 'Ocorreu um erro ao processar este menu.', ephemeral: true }).catch(() => {});
@@ -256,7 +255,7 @@ const event: Event<'interactionCreate'> = {
           try {
             await modal.execute(client, interaction);
           } catch (error) {
-            logger.error(`Erro ao executar modal ${modalId}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+            logger.error(`[Modal] ❌ ${modalId}: ${error instanceof Error ? error.message : String(error)}`);
             
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp({ content: 'Ocorreu um erro ao processar este formulário.', ephemeral: true }).catch(() => {});
@@ -275,12 +274,12 @@ const event: Event<'interactionCreate'> = {
           try {
             await (command as any).executeAutocomplete(client, interaction);
           } catch (error) {
-            logger.error(`Erro ao executar autocomplete para ${commandName}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+            logger.error(`[Autocomplete] ❌ ${commandName}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
       }
     } catch (error) {
-      logger.error(`Erro não tratado em interactionCreate: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      logger.error(`[Interaction] ❌ Erro não tratado: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 };
