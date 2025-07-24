@@ -11,15 +11,13 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento trackEnd');
+      logger.error('[Lavalink] ❌ Não inicializado para evento trackEnd');
       return;
     }
     
     miClient.lavalink.on('trackEnd', async (player: any, track: any, payload: any) => {
       try {
         if (!track) return;
-        
-        logger.info(`Track finalizada: ${track.info.title} no servidor ${player.guildId} - Razão: ${payload.reason}`);
         
         if (payload.reason === 'replaced') return;
         
@@ -57,11 +55,9 @@ const event: Event<'ready'> = {
         }
         
       } catch (error) {
-        logger.error(`Erro no evento trackEnd: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ trackEnd: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento trackEnd do Lavalink registrado com sucesso');
   }
 };
 
