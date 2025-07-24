@@ -18,36 +18,42 @@ export async function loadComponents(client: MiClient): Promise<void> {
   client.modals.clear();
   client.selectMenus.clear();
   
-  logger.info('[Componentes] Iniciando carregamento de componentes...');
+  let totalErrors = 0;
   
-  await loadComponentType(client, 'buttons', client.buttons);
-  await loadComponentType(client, 'modals', client.modals);
-  await loadComponentType(client, 'menus', client.selectMenus);
+  totalErrors += await loadComponentType(client, 'buttons', client.buttons);
+  totalErrors += await loadComponentType(client, 'modals', client.modals);
+  totalErrors += await loadComponentType(client, 'menus', client.selectMenus);
   
-  logger.info(`[Componentes] Carregamento concluído: ${client.buttons.size} botões, ${client.modals.size} modais, ${client.selectMenus?.size || 0} menus de seleção`);
+  const totalComponents = client.buttons.size + client.modals.size + (client.selectMenus?.size || 0);
+  
+  if (totalErrors > 0) {
+    logger.warn(`[Componentes] ⚠️ ${totalComponents} componentes carregados com ${totalErrors} erros`);
+  } else {
+    logger.info(`[Componentes] ✅ ${totalComponents} componentes carregados com sucesso!`);
+  }
 }
 
 async function loadComponentType(
   client: MiClient, 
   type: string, 
   collection: Collection<string, Component>
-): Promise<void> {
+): Promise<number> {
   const componentsDir = path.join(__dirname, '..', 'components', type);
   if (!fs.existsSync(componentsDir)) {
-    logger.warn(`[Componentes] Diretório de ${type} não existe: ${componentsDir}`);
-    return;
+    logger.error(`[Componentes] ❌ Diretório de ${type} não existe: ${componentsDir}`);
+    return 1;
   }
   
-  await loadComponentsRecursively(componentsDir, collection, type);
-  
-  logger.info(`[Componentes] Total de ${collection.size} ${type} carregados`);
+  return await loadComponentsRecursively(componentsDir, collection, type);
 }
 
 async function loadComponentsRecursively(
   dir: string, 
   collection: Collection<string, Component>, 
   type: string
-): Promise<void> {
+): Promise<number> {
+  let errorCount = 0;
+  
   try {
     const items = fs.readdirSync(dir);
     
@@ -56,15 +62,17 @@ async function loadComponentsRecursively(
       const stat = fs.statSync(itemPath);
       
       if (stat.isDirectory()) {
-        logger.info(`[Componentes] Carregando subdiretório: ${item}`);
-        await loadComponentsRecursively(itemPath, collection, type);
+        errorCount += await loadComponentsRecursively(itemPath, collection, type);
       } else if ((item.endsWith('.ts') || item.endsWith('.js')) && !item.endsWith('.d.ts')) {
-        await loadSingleComponent(itemPath, collection, type, item);
+        errorCount += await loadSingleComponent(itemPath, collection, type, item);
       }
     }
   } catch (error) {
-    logger.error(`[Componentes] Erro ao ler diretório ${dir}: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(`[Componentes] ❌ Erro ao ler diretório ${dir}: ${error instanceof Error ? error.message : String(error)}`);
+    errorCount++;
   }
+  
+  return errorCount;
 }
 
 async function loadSingleComponent(
@@ -72,33 +80,34 @@ async function loadSingleComponent(
   collection: Collection<string, Component>,
   type: string,
   fileName: string
-): Promise<void> {
+): Promise<number> {
   try {
     delete require.cache[require.resolve(filePath)];
     
     const component = await import(filePath) as { default: Component };
     
     if (!component.default) {
-      logger.warn(`[Componentes] Componente em ${fileName} não tem uma exportação padrão`);
-      return;
+      logger.error(`[Componentes] ❌ Componente em ${fileName} não tem uma exportação padrão`);
+      return 1;
     }
     
     const componentInstance = component.default;
     
     if (!componentInstance.customId) {
-      logger.warn(`[Componentes] Componente em ${fileName} não tem um customId definido`);
-      return;
+      logger.error(`[Componentes] ❌ Componente em ${fileName} não tem um customId definido`);
+      return 1;
     }
     
     if (!componentInstance.execute || typeof componentInstance.execute !== 'function') {
-      logger.warn(`[Componentes] Componente em ${fileName} não tem um método execute válido`);
-      return;
+      logger.error(`[Componentes] ❌ Componente em ${fileName} não tem um método execute válido`);
+      return 1;
     }
     
     collection.set(componentInstance.customId, componentInstance);
-    logger.info(`[Componentes] ${type} carregado: ${componentInstance.customId} (${fileName})`);
+    return 0;
   } catch (error) {
-    logger.error(`[Componentes] Erro ao carregar ${type} ${fileName}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    logger.error(`[Componentes] ❌ Erro ao carregar ${type} ${fileName}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    return 1;
   }
 }
 
