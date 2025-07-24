@@ -10,7 +10,7 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento trackStuck');
+      logger.error('[Lavalink] ❌ Não inicializado para evento trackStuck');
       return;
     }
     
@@ -20,8 +20,6 @@ const event: Event<'ready'> = {
         
         const channel = await client.channels.fetch(player.textChannelId || '');
         if (!channel || !(channel instanceof TextChannel)) return;
-        
-        logger.warn(`Música travada: ${track.info.title} no servidor ${player.guildId}`);
         
         const embed = new EmbedBuilder()
           .setTitle('⚠️ Música Travada')
@@ -43,11 +41,9 @@ const event: Event<'ready'> = {
         }
         
       } catch (error) {
-        logger.error(`Erro no evento trackStuck: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ trackStuck: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento trackStuck do Lavalink registrado com sucesso');
   }
 };
 
