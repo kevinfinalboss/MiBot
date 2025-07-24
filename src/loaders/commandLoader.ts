@@ -15,10 +15,9 @@ export async function loadCommands(client: MiClient): Promise<void> {
   }
   
   let commandCount = 0;
+  let errorCount = 0;
   const commandsToRegister: any[] = [];
   const loadedCommandNames: Set<string> = new Set();
-  
-  logger.info('[Comandos] Iniciando carregamento de comandos...');
   
   client.commands.clear();
   client.aliases.clear();
@@ -44,21 +43,24 @@ export async function loadCommands(client: MiClient): Promise<void> {
       const command = await import(commandPath) as { default: Command };
       
       if (!command.default) {
-        logger.warn(`[Comandos] Comando em ${relativePath} não tem uma exportação padrão`);
+        logger.error(`[Comandos] ❌ Comando em ${relativePath} não tem uma exportação padrão`);
+        errorCount++;
         return;
       }
       
       const commandInstance = command.default;
       
       if (!commandInstance.data) {
-        logger.warn(`[Comandos] Comando em ${relativePath} não tem data definida`);
+        logger.error(`[Comandos] ❌ Comando em ${relativePath} não tem data definida`);
+        errorCount++;
         return;
       }
       
       const commandName = commandInstance.data.name || path.basename(relativePath, path.extname(relativePath));
       
       if (loadedCommandNames.has(commandName)) {
-        logger.warn(`[Comandos] Comando duplicado encontrado: ${commandName} em ${relativePath}`);
+        logger.error(`[Comandos] ❌ Comando duplicado encontrado: ${commandName} em ${relativePath}`);
+        errorCount++;
         return;
       }
       
@@ -68,7 +70,8 @@ export async function loadCommands(client: MiClient): Promise<void> {
       if (commandInstance.options.aliases && Array.isArray(commandInstance.options.aliases)) {
         for (const alias of commandInstance.options.aliases) {
           if (client.aliases.has(alias)) {
-            logger.warn(`[Comandos] Alias duplicado encontrado: ${alias} para comando ${commandName}`);
+            logger.error(`[Comandos] ❌ Alias duplicado encontrado: ${alias} para comando ${commandName}`);
+            errorCount++;
           } else {
             client.aliases.set(alias, commandName);
           }
@@ -83,14 +86,9 @@ export async function loadCommands(client: MiClient): Promise<void> {
       
       commandCount++;
       
-      const pathParts = relativePath.split('/');
-      const category = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : 'root';
-      const fileName = pathParts[pathParts.length - 1];
-      
-      logger.info(`[Comandos] ✅ ${commandName} carregado (${category}/${fileName})`);
-      
     } catch (error) {
       logger.error(`[Comandos] ❌ Erro ao carregar comando ${relativePath}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      errorCount++;
     }
   }
   
@@ -103,8 +101,11 @@ export async function loadCommands(client: MiClient): Promise<void> {
       return acc;
     }, {} as Record<string, number>);
   
-  logger.info(`[Comandos] 📊 Total: ${commandCount} comandos carregados com sucesso!`);
-  logger.info(`[Comandos] 📁 Categorias: ${Object.entries(categories).map(([cat, count]) => `${cat} (${count})`).join(', ')}`);
+  if (errorCount > 0) {
+    logger.warn(`[Comandos] ⚠️ ${commandCount} comandos carregados com ${errorCount} erros`);
+  } else {
+    logger.info(`[Comandos] ✅ ${commandCount} comandos carregados com sucesso!`);
+  }
   
   if (client.isReady()) {
     await syncSlashCommands(client, commandsToRegister);
@@ -126,8 +127,6 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
       logger.error('[Comandos] ID do cliente não disponível para sincronização de comandos slash');
       return;
     }
-    
-    logger.info(`[Comandos] 🔄 Iniciando sincronização de ${commandsToRegister.length} comandos slash...`);
     
     const existingCommands = await rest.get(
       Routes.applicationCommands(clientId)
@@ -157,47 +156,43 @@ async function syncSlashCommands(client: MiClient, commandsToRegister: any[]): P
       }
     });
     
+    let hasChanges = false;
+    
     if (commandsToAdd.length > 0) {
-      logger.info(`[Comandos] ➕ Registrando ${commandsToAdd.length} novos comandos slash...`);
-      
+      hasChanges = true;
       for (const cmd of commandsToAdd) {
         await rest.post(
           Routes.applicationCommands(clientId),
           { body: cmd }
         );
-        logger.info(`[Comandos] ✅ Comando slash registrado: ${cmd.name}`);
       }
+      logger.info(`[Comandos] ➕ ${commandsToAdd.length} comandos slash registrados`);
     }
     
     if (commandsToUpdate.length > 0) {
-      logger.info(`[Comandos] 🔄 Atualizando ${commandsToUpdate.length} comandos slash existentes...`);
-      
+      hasChanges = true;
       for (const cmd of commandsToUpdate) {
         const existingCmd = existingCommandsMap.get(cmd.name);
         await rest.patch(
           Routes.applicationCommand(clientId, existingCmd!.id),
           { body: cmd }
         );
-        logger.info(`[Comandos] ✅ Comando slash atualizado: ${cmd.name}`);
       }
+      logger.info(`[Comandos] 🔄 ${commandsToUpdate.length} comandos slash atualizados`);
     }
     
     if (commandsToRemove.length > 0) {
-      logger.info(`[Comandos] 🗑️ Removendo ${commandsToRemove.length} comandos slash obsoletos...`);
-      
+      hasChanges = true;
       for (const cmdId of commandsToRemove) {
         await rest.delete(
           Routes.applicationCommand(clientId, cmdId)
         );
-        logger.info(`[Comandos] ✅ Comando slash removido: ID ${cmdId}`);
       }
+      logger.info(`[Comandos] 🗑️ ${commandsToRemove.length} comandos slash removidos`);
     }
     
-    logger.info('[Comandos] 🎉 Sincronização de comandos slash concluída com sucesso!');
-    logger.info(`[Comandos] 📊 Resumo: ${commandsToAdd.length} adicionados, ${commandsToUpdate.length} atualizados, ${commandsToRemove.length} removidos`);
-    
-    if (commandsToAdd.length === 0 && commandsToUpdate.length === 0 && commandsToRemove.length === 0) {
-      logger.info('[Comandos] ℹ️ Todos os comandos slash já estão sincronizados');
+    if (hasChanges) {
+      logger.info('[Comandos] ✅ Sincronização de comandos slash concluída');
     }
     
   } catch (error) {
