@@ -11,7 +11,7 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento trackStart');
+      logger.error('[Lavalink] ❌ Não inicializado para evento trackStart');
       return;
     }
     
@@ -21,8 +21,6 @@ const event: Event<'ready'> = {
         
         const channel = await client.channels.fetch(player.textChannelId || '');
         if (!channel || !(channel instanceof TextChannel)) return;
-        
-        logger.info(`Nova música iniciada: ${track.info.title} no servidor ${player.guildId}`);
         
         const embed = new EmbedBuilder()
           .setTitle('🎵 Tocando Agora')
@@ -106,11 +104,9 @@ const event: Event<'ready'> = {
         }
         
       } catch (error) {
-        logger.error(`Erro no evento trackStart: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ trackStart: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento trackStart do Lavalink registrado com sucesso');
   }
 };
 
