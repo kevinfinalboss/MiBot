@@ -11,7 +11,7 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento queueEnd');
+      logger.error('[Lavalink] ❌ Não inicializado para evento queueEnd');
       return;
     }
     
@@ -58,7 +58,7 @@ const event: Event<'ready'> = {
               await channel.send({ embeds: [disconnectEmbed] });
               nowPlayingMessages.delete(player.guildId);
             } catch (error) {
-              logger.error(`Erro ao desconectar player por inatividade: ${error instanceof Error ? error.message : String(error)}`);
+              logger.error(`[Lavalink] ❌ Desconexão por inatividade: ${error instanceof Error ? error.message : String(error)}`);
             }
           }
         }, 3 * 60 * 1000);
@@ -66,11 +66,9 @@ const event: Event<'ready'> = {
         player.disconnectTimeout = timeoutId;
         
       } catch (error) {
-        logger.error(`Erro no evento queueEnd: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ queueEnd: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento queueEnd do Lavalink registrado com sucesso');
   }
 };
 
