@@ -30,17 +30,14 @@ export class KubernetesClient extends BaseClient {
 
   public async initialize(): Promise<void> {
     try {
-      logger.info('[Kubernetes] Inicializando cliente Kubernetes...');
-      
       const isConnected = await this.testConnection();
       if (!isConnected) {
         throw new Error('Falha ao conectar com o cluster Kubernetes');
       }
 
-      logger.success(`[Kubernetes] Cliente inicializado com sucesso${this.config.inCluster ? ' (in-cluster)' : ' (external)'}`);
-      logger.info(`[Kubernetes] Namespace padrão: ${this.getNamespace()}`);
+      logger.info(`[Kubernetes] ✅ Cliente inicializado${this.config.inCluster ? ' (in-cluster)' : ' (external)'}`);
     } catch (error) {
-      logger.error('[Kubernetes] Falha na inicialização: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error(`[Kubernetes] ❌ Falha na inicialização: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
