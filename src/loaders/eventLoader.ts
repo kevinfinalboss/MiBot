@@ -8,13 +8,13 @@ export async function loadEvents(client: MiClient): Promise<void> {
   const eventDirs = ['client', 'guild', 'interaction', 'message', 'lavalink'];
   const loadedEvents: Set<string> = new Set();
   let eventCount = 0;
-  
-  logger.info('[Events] Iniciando carregamento de eventos...');
+  let errorCount = 0;
   
   for (const dir of eventDirs) {
     const eventDir = path.join(__dirname, '..', 'events', dir);
     if (!fs.existsSync(eventDir)) {
-      logger.warn('[Events] Diretório de eventos não existe: ' + eventDir);
+      logger.error(`[Events] ❌ Diretório de eventos não existe: ${eventDir}`);
+      errorCount++;
       continue;
     }
     
@@ -28,7 +28,8 @@ export async function loadEvents(client: MiClient): Promise<void> {
         const event = await import(eventPath) as { default: Event<any> };
         
         if (!event.default) {
-          logger.warn('[Events] Evento em ' + file + ' não tem uma exportação padrão');
+          logger.error(`[Events] ❌ Evento em ${file} não tem uma exportação padrão`);
+          errorCount++;
           continue;
         }
         
@@ -37,7 +38,8 @@ export async function loadEvents(client: MiClient): Promise<void> {
         const eventKey = `${dir}-${eventName}-${file}`;
         
         if (loadedEvents.has(eventKey)) {
-          logger.warn('[Events] Evento duplicado encontrado: ' + eventKey);
+          logger.error(`[Events] ❌ Evento duplicado encontrado: ${eventKey}`);
+          errorCount++;
           continue;
         }
         
@@ -57,12 +59,16 @@ export async function loadEvents(client: MiClient): Promise<void> {
         
         loadedEvents.add(eventKey);
         eventCount++;
-        logger.info('[Events] Evento carregado: ' + eventName + ' (' + dir + '/' + file + ')');
       } catch (error) {
-        logger.error('[Events] Erro ao carregar evento ' + file + ': ' + (error instanceof Error ? error.stack || error.message : String(error)));
+        logger.error(`[Events] ❌ Erro ao carregar evento ${file}: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        errorCount++;
       }
     }
   }
   
-  logger.info('[Events] Total de ' + eventCount + ' eventos carregados com sucesso!');
+  if (errorCount > 0) {
+    logger.warn(`[Events] ⚠️ ${eventCount} eventos carregados com ${errorCount} erros`);
+  } else {
+    logger.info(`[Events] ✅ ${eventCount} eventos carregados com sucesso!`);
+  }
 }
