@@ -11,7 +11,7 @@ const event: Event<'ready'> = {
     const miClient = client as MiClient;
     
     if (!miClient.lavalink) {
-      logger.error('Lavalink não inicializado para evento playerDisconnect');
+      logger.error('[Lavalink] ❌ Não inicializado para evento playerDisconnect');
       return;
     }
     
@@ -48,14 +48,10 @@ const event: Event<'ready'> = {
           player.destroy();
         }
         
-        logger.info(`Player desconectado no servidor ${player.guildId}`);
-        
       } catch (error) {
-        logger.error(`Erro no evento playerDisconnect: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+        logger.error(`[Lavalink] ❌ playerDisconnect: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    
-    logger.info('Evento playerDisconnect do Lavalink registrado com sucesso');
   }
 };
 
