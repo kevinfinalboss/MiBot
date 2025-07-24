@@ -12,7 +12,7 @@ export abstract class CloudflareBaseClient {
 
   protected handleError(method: string, error: unknown): never {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(`[Cloudflare] Erro em ${method}: ${errorMessage}`);
+    logger.error(`[Cloudflare] ❌ ${method}: ${errorMessage}`);
     throw error;
   }
 
