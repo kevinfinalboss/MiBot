@@ -20,7 +20,7 @@ export class MiClient extends Client {
   public aliases = new Collection<string, string>();
   public cooldowns = new Collection<string, number>();
 
-  public lavalink: LavalinkManager;
+  public lavalink!: LavalinkManager;
   public pterodactyl?: PterodactylClient;
   public cloudflare?: CloudflareClient;
   public kubernetes?: KubernetesClient;
@@ -44,24 +44,25 @@ export class MiClient extends Client {
     });
 
     this.config = config;
-
     this.database = DatabaseClient.getInstance();
+    this.setupLavalink();
+    this.setupExternalClients();
+    this.setupEventHandlers();
+    this.setupProcessHandlers();
+  }
 
-    if (!config.lavalink.nodes || !Array.isArray(config.lavalink.nodes) || config.lavalink.nodes.length === 0) {
+  private setupLavalink(): void {
+    if (!this.config.lavalink.nodes || !Array.isArray(this.config.lavalink.nodes) || this.config.lavalink.nodes.length === 0) {
       throw new Error('É necessário configurar pelo menos um node Lavalink válido');
     }
         
-    const lavalinkNodes = config.lavalink.nodes.map(node => {
-      return {
-        id: node.id,
-        host: node.host,
-        port: parseInt(String(node.port), 10),
-        authorization: node.password,
-        secure: node.secure
-      };
-    });
-    
-    logger.info('Inicializando LavalinkManager com ' + lavalinkNodes.length + ' nós');
+    const lavalinkNodes = this.config.lavalink.nodes.map(node => ({
+      id: node.id,
+      host: node.host,
+      port: parseInt(String(node.port), 10),
+      authorization: node.password,
+      secure: node.secure
+    }));
         
     this.lavalink = new LavalinkManager({
       nodes: lavalinkNodes,
@@ -74,105 +75,142 @@ export class MiClient extends Client {
         volumeDecrementer: 0.75
       }
     });
+  }
 
-    if (config.pterodactyl?.url && config.pterodactyl?.apiKey) {
+  private setupExternalClients(): void {
+    this.setupPterodactyl();
+    this.setupCloudflare();
+    this.setupKubernetes();
+  }
+
+  private setupPterodactyl(): void {
+    if (this.config.pterodactyl?.url && this.config.pterodactyl?.apiKey) {
       this.pterodactyl = new PterodactylClient(
-        config.pterodactyl.url,
-        config.pterodactyl.apiKey
+        this.config.pterodactyl.url,
+        this.config.pterodactyl.apiKey
       );
-    } else {
-      logger.warn('[Pterodactyl] Configuração não encontrada - recursos do Pterodactyl desabilitados');
     }
+  }
 
-    if (config.cloudflare?.apiToken) {
+  private setupCloudflare(): void {
+    if (this.config.cloudflare?.apiToken) {
       this.cloudflare = new CloudflareClient({
-        apiToken: config.cloudflare.apiToken
+        apiToken: this.config.cloudflare.apiToken
       });
-    } else {
-      logger.warn('[Cloudflare] Configuração não encontrada - recursos do Cloudflare desabilitados');
     }
+  }
 
-    if (config.kubernetes) {
+  private setupKubernetes(): void {
+    if (this.config.kubernetes) {
       try {
-        this.kubernetes = new KubernetesClient(config.kubernetes);
-        logger.info('[Kubernetes] Cliente criado com sucesso');
+        this.kubernetes = new KubernetesClient(this.config.kubernetes);
       } catch (error) {
-        logger.error('[Kubernetes] Erro ao criar cliente: ' + (error instanceof Error ? error.message : String(error)));
-        logger.warn('[Kubernetes] Recursos do Kubernetes desabilitados devido ao erro');
+        logger.error(`[Kubernetes] ❌ Erro ao criar cliente: ${error instanceof Error ? error.message : String(error)}`);
         this.kubernetes = undefined;
       }
-    } else {
-      logger.warn('[Kubernetes] Configuração não encontrada - recursos do Kubernetes desabilitados');
     }
+  }
 
-    this.once('ready', async () => {
+  private setupEventHandlers(): void {
+    this.once('ready', this.onReady.bind(this));
+    this.on('raw', this.onRawData.bind(this));
+  }
+
+  private async onReady(): Promise<void> {
+    await this.initializeLavalink();
+    await this.initializeExternalServices();
+  }
+
+  private async initializeLavalink(): Promise<void> {
+    try {
       await this.lavalink.init({
         id: this.user!.id,
         username: this.user!.tag
       });
-      logger.success('Lavalink conectado como ' + this.user!.tag);
+    } catch (error) {
+      logger.error(`[Lavalink] ❌ Erro na inicialização: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
-      if (this.pterodactyl) {
-        try {
-          await this.pterodactyl.initialize();
-        } catch (error) {
-          logger.error('[Pterodactyl] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
-          logger.warn('[Pterodactyl] Continuando sem recursos do Pterodactyl...');
-          this.pterodactyl = undefined;
-        }
-      }
+  private async initializeExternalServices(): Promise<void> {
+    const services = [
+      { name: 'Pterodactyl', client: this.pterodactyl },
+      { name: 'Cloudflare', client: this.cloudflare },
+      { name: 'Kubernetes', client: this.kubernetes }
+    ];
 
-      if (this.cloudflare) {
-        try {
-          await this.cloudflare.initialize();
-        } catch (error) {
-          logger.error('[Cloudflare] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
-          logger.warn('[Cloudflare] Continuando sem recursos do Cloudflare...');
-          this.cloudflare = undefined;
+    const results = await Promise.allSettled(
+      services.map(async ({ name, client }) => {
+        if (client) {
+          await client.initialize();
+          return { name, success: true };
         }
-      }
+        return { name, success: false, reason: 'not configured' };
+      })
+    );
 
-      if (this.kubernetes) {
-        try {
-          await this.kubernetes.initialize();
-        } catch (error) {
-          logger.error('[Kubernetes] Erro na inicialização: ' + (error instanceof Error ? error.message : String(error)));
-          logger.warn('[Kubernetes] Continuando sem recursos do Kubernetes...');
-          this.kubernetes = undefined;
+    let successCount = 0;
+    let errorCount = 0;
+
+    results.forEach((result, index) => {
+      const serviceName = services[index].name;
+      
+      if (result.status === 'fulfilled') {
+        if (result.value.success) {
+          successCount++;
         }
+      } else {
+        logger.error(`[${serviceName}] ❌ Erro na inicialização: ${result.reason}`);
+        this.disableService(serviceName);
+        errorCount++;
       }
     });
 
-    this.on('raw', (d) => {
-      if(d.t === 'VOICE_SERVER_UPDATE' || d.t === 'VOICE_STATE_UPDATE') {
-        this.lavalink.sendRawData(d);
-      }
-    });
+    if (errorCount > 0) {
+      logger.warn(`[Serviços] ⚠️ ${successCount} serviços inicializados com ${errorCount} erros`);
+    } else if (successCount > 0) {
+      logger.info(`[Serviços] ✅ ${successCount} serviços externos inicializados`);
+    }
+  }
 
-    process.on('SIGINT', async () => {
-      logger.info('[MiBot] Recebido SIGINT, desconectando do banco...');
+  private disableService(serviceName: string): void {
+    switch (serviceName) {
+      case 'Pterodactyl':
+        this.pterodactyl = undefined;
+        break;
+      case 'Cloudflare':
+        this.cloudflare = undefined;
+        break;
+      case 'Kubernetes':
+        this.kubernetes = undefined;
+        break;
+    }
+  }
+
+  private onRawData(d: any): void {
+    if (d.t === 'VOICE_SERVER_UPDATE' || d.t === 'VOICE_STATE_UPDATE') {
+      this.lavalink.sendRawData(d);
+    }
+  }
+
+  private setupProcessHandlers(): void {
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(`[MiBot] Recebido ${signal}, finalizando...`);
       await this.database.disconnect();
       process.exit(0);
-    });
+    };
 
-    process.on('SIGTERM', async () => {
-      logger.info('[MiBot] Recebido SIGTERM, desconectando do banco...');
-      await this.database.disconnect();
-      process.exit(0);
-    });
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   }
 
   public async start(): Promise<void> {
     try {
-      logger.info('[MongoDB] Conectando ao banco de dados primeiro...');
       await this.database.connect();
-      logger.success('[MongoDB] Conexão estabelecida antes do login Discord');
-      
-      logger.info('Iniciando login no Discord...');
       await this.login(this.config.bot.token);
-      logger.success('Logado como ' + this.user?.tag);
+      logger.info(`[MiBot] ✅ Bot inicializado como ${this.user?.tag}`);
     } catch (error) {
-      logger.error('Erro durante inicialização: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error(`[MiBot] ❌ Erro durante inicialização: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
